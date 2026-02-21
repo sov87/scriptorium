@@ -44,3 +44,21 @@ configs/*private*.toml
 # Archives
 *.zip
 *.sha256.txt
+
+# --- Local workspace / scratch ---
+scratch/
+data_raw/
+
+# Backup / temp files
+*.bak
+*.bak_*
+*.corrupt_*
+*.tmp
+*.log
+
+# Sample data backups created during setup
+sample_data/data_proc/*.bak
+sample_data/data_proc/*.bad.bak
+
+# Local tools / experiments (keep local unless you explicitly want them public)
+src/ai_pilot_generate.py
