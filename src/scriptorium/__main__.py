@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import pathlib
 from pathlib import Path
 
 from .config import load_config
@@ -18,6 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_release.add_argument("--run-retrieval", action="store_true")
     p_release.add_argument("--run-machine", action="store_true")
     p_release.add_argument("--snapshot", action="store_true")
+    p_release.add_argument("--snapshot-no-canon", action="store_true", help="When --snapshot, exclude canon JSONL files from the snapshot bundle.")
     p_release.add_argument("--print-only", action="store_true", help="Print the PowerShell command but do not run it.")
 
     p_cmd = sub.add_parser("print-ps", help="Print the PowerShell command that would be executed.")
@@ -185,7 +187,7 @@ def main(argv: list[str] | None = None) -> int:
             print(cmd_str)
             return 0
 
-        return run_release_window(
+        ret = run_release_window(
             ps1_path=cfg.release_ps1,
             window=cfg.window,
             tag=cfg.tag,
@@ -195,6 +197,20 @@ def main(argv: list[str] | None = None) -> int:
             run_machine=args.run_machine,
             snapshot=args.snapshot,
         )
+        if args.snapshot and ret == 0:
+            try:
+                from .snapshot_bundle import build_snapshot_bundle
+                zip_path = build_snapshot_bundle(
+                    project_root=cfg.project_root,
+                    window=str(cfg.window),
+                    tag=str(cfg.tag),
+                    config_path=pathlib.Path(args.config),
+                    include_canon=(not getattr(args, "snapshot_no_canon", False)),
+                )
+                print(str(zip_path))
+            except Exception as e:
+                raise SystemExit(f"snapshot bundling failed: {type(e).__name__}: {e}")
+        return ret
 
     raise SystemExit("unreachable")
 
