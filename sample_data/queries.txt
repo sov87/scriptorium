@@ -1,0 +1,4 @@
+# one query per line; blank lines and # comments ignored
+baptism and remission of sins
+humility and pride
+church unity and schism

@@ -1,0 +1,46 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+
+# --- Virtual environments ---
+.venv/
+venv/
+.env/
+
+# --- Project runtime artifacts (never commit) ---
+runs/
+releases/
+reports/
+data_gen/
+indexes/
+models/
+
+# Canonical corpora (private / large) — keep out of public repo
+data_proc/
+
+# Allow the small public sample corpus
+!sample_data/
+!sample_data/**
+
+# Sample outputs (generated locally)
+sample_data/indexes/
+sample_data/runs/
+sample_data/reports/
+sample_data/releases/
+
+# Local machine-specific configs
+configs/window_*.toml
+configs/*_local*.toml
+configs/*private*.toml
+!configs/TEMPLATE.example.toml
+
+# Archives
+*.zip
+*.sha256.txt
