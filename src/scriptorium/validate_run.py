@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
+
 
 from .config import Config
 
@@ -82,6 +83,65 @@ def _validate_answer_json(obj: dict, allowed_ids: set[str]) -> None:
             raise ValueError(f"citation id not allowed: {cid}")
 
 
+def _require(p: Path, *, strict: bool, errors: list[str], warnings: list[str], label: str) -> None:
+    if not p.exists():
+        (errors if strict else warnings).append(f"missing: {label}: {p}")
+
+
+def _maybe_parse_int(x: Any, default: int) -> int:
+    try:
+        v = int(x)
+        return v if v >= 1 else default
+    except Exception:
+        return default
+
+
+def _validate_phase_c_audit(run_dir: Path, meta: dict, *, strict: bool, errors: list[str], warnings: list[str], info: dict) -> None:
+    """
+    Phase C contract:
+      - answer_meta.json schema == scriptorium.answer_meta.v2
+      - meta.attempt indicates how many LLM attempts were used
+      - For each attempt i:
+          llm_request_attempt{i}.json
+          llm_response_attempt{i}.json
+          answer_raw_attempt{i}.txt
+        For each failed attempt i (< attempt):
+          validation_attempt{i}.json
+      - If attempt >= 2:
+          repair_prompt_system.txt
+          repair_prompt_user.txt
+    """
+    schema = str(meta.get("schema", ""))
+    if schema != "scriptorium.answer_meta.v2":
+        return
+
+    attempt = _maybe_parse_int(meta.get("attempt"), 1)
+    info["phase_c_meta_schema"] = schema
+    info["phase_c_attempt"] = attempt
+
+    # Core per-attempt artifacts
+    for i in range(1, attempt + 1):
+        _require(run_dir / f"llm_request_attempt{i}.json", strict=strict, errors=errors, warnings=warnings, label=f"phaseC llm_request_attempt{i}.json")
+        _require(run_dir / f"llm_response_attempt{i}.json", strict=strict, errors=errors, warnings=warnings, label=f"phaseC llm_response_attempt{i}.json")
+        _require(run_dir / f"answer_raw_attempt{i}.txt", strict=strict, errors=errors, warnings=warnings, label=f"phaseC answer_raw_attempt{i}.txt")
+
+    # Validation JSON for failed attempts
+    for i in range(1, attempt):
+        _require(run_dir / f"validation_attempt{i}.json", strict=strict, errors=errors, warnings=warnings, label=f"phaseC validation_attempt{i}.json")
+
+    # Repair prompts if we went past attempt 1
+    if attempt >= 2:
+        _require(run_dir / "repair_prompt_system.txt", strict=strict, errors=errors, warnings=warnings, label="phaseC repair_prompt_system.txt")
+        _require(run_dir / "repair_prompt_user.txt", strict=strict, errors=errors, warnings=warnings, label="phaseC repair_prompt_user.txt")
+
+    # Optional: stable allow-list capture (useful for audit)
+    p_allowed = run_dir / "allowed_ids.json"
+    if p_allowed.exists():
+        info["allowed_ids_sha256"] = _sha256_file(p_allowed)
+    else:
+        (errors if strict else warnings).append(f"missing: allowed_ids.json (optional but recommended): {p_allowed}")
+
+
 def _validate_answer_run(run_dir: Path, *, strict: bool) -> tuple[list[str], list[str], dict]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -95,17 +155,22 @@ def _validate_answer_run(run_dir: Path, *, strict: bool) -> tuple[list[str], lis
     if not cand_path.exists():
         errors.append(f"missing: {cand_path}")
         return errors, warnings, info
-
     if not ans_path.exists():
         errors.append(f"missing: {ans_path}")
         return errors, warnings, info
 
+    # Meta is required for Phase C enforcement; otherwise we fall back to candidates.
+    meta: dict | None = None
     if not meta_path.exists():
         warnings.append(f"missing: {meta_path} (cannot validate allowed_ids; will fallback to candidates)")
     else:
-        info["answer_meta_sha256"] = _sha256_file(meta_path)
+        try:
+            meta = _read_json(meta_path)
+            info["answer_meta_sha256"] = _sha256_file(meta_path)
+        except Exception as e:
+            warnings.append(f"failed to parse answer_meta.json: {type(e).__name__}: {e}")
 
-    # Optional audit artifacts
+    # Prompt artifacts (these are part of “defensible runs”)
     for opt in ("prompt_system.txt", "prompt_user.txt"):
         p = run_dir / opt
         if not p.exists():
@@ -113,15 +178,20 @@ def _validate_answer_run(run_dir: Path, *, strict: bool) -> tuple[list[str], lis
         else:
             info[f"{opt}_sha256"] = _sha256_file(p)
 
+    # Raw output artifacts: Phase C prefers attempt files; older runs may have answer_raw.txt
     raw_attempts = sorted(run_dir.glob("answer_raw_attempt*.txt"))
-    if not raw_attempts:
+    if raw_attempts:
+        info["answer_raw_attempts"] = [p.name for p in raw_attempts]
+    else:
         p = run_dir / "answer_raw.txt"
         if not p.exists():
             (errors if strict else warnings).append(f"missing: {p} (no raw model output saved)")
         else:
             info["answer_raw_sha256"] = _sha256_file(p)
-    else:
-        info["answer_raw_attempts"] = [str(p) for p in raw_attempts]
+
+    # Enforce Phase C audit contract if applicable
+    if isinstance(meta, dict):
+        _validate_phase_c_audit(run_dir, meta, strict=strict, errors=errors, warnings=warnings, info=info)
 
     # Parse candidates and determine allowed IDs
     try:
@@ -142,17 +212,12 @@ def _validate_answer_run(run_dir: Path, *, strict: bool) -> tuple[list[str], lis
         return errors, warnings, info
 
     allowed_ids: set[str] = set()
-    if meta_path.exists():
-        try:
-            meta = _read_json(meta_path)
-            allowed = meta.get("allowed_ids")
-            if isinstance(allowed, list) and all(isinstance(x, str) for x in allowed):
-                allowed_ids = set(allowed)
-            else:
-                warnings.append("answer_meta.json has no valid allowed_ids; using candidates list as allowed set")
-        except Exception as e:
-            warnings.append(f"failed to parse answer_meta.json; using candidates list: {type(e).__name__}: {e}")
-
+    if isinstance(meta, dict):
+        allowed = meta.get("allowed_ids")
+        if isinstance(allowed, list) and all(isinstance(x, str) for x in allowed):
+            allowed_ids = set(allowed)
+        else:
+            warnings.append("answer_meta.json has no valid allowed_ids; using candidates list as allowed set")
     if not allowed_ids:
         allowed_ids = set(cand_ids)
 
@@ -161,9 +226,10 @@ def _validate_answer_run(run_dir: Path, *, strict: bool) -> tuple[list[str], lis
         ans = _read_json(ans_path)
         _validate_answer_json(ans, allowed_ids)
         info["answer_sha256"] = _sha256_file(ans_path)
-        info["citations_count"] = len(ans.get("citations", []))
+        info["citations_count"] = len(ans.get("citations", [])) if isinstance(ans, dict) else 0
     except Exception as e:
         errors.append(f"answer.json validation failed: {type(e).__name__}: {e}")
+        return errors, warnings, info
 
     return errors, warnings, info
 
@@ -187,6 +253,7 @@ def _validate_answer_batch(run_dir: Path, *, strict: bool) -> tuple[list[str], l
         if batch.get("schema") != "scriptorium.answer_batch.v1":
             (errors if strict else warnings).append(f"batch.json schema mismatch: {batch.get('schema')}")
         total = int(batch.get("count", 0))
+        dry_run = bool(batch.get("params", {}).get("dry_run", False))
     except Exception as e:
         errors.append(f"failed to parse batch.json: {type(e).__name__}: {e}")
         return errors, warnings, info
@@ -207,7 +274,6 @@ def _validate_answer_batch(run_dir: Path, *, strict: bool) -> tuple[list[str], l
         errors.append(f"failed to parse summary.json: {type(e).__name__}: {e}")
         return errors, warnings, info
 
-    # results.jsonl may contain multiple runs appended; take last status per qid_full
     try:
         lines = _read_jsonl(results_path)
         if not lines:
@@ -228,15 +294,12 @@ def _validate_answer_batch(run_dir: Path, *, strict: bool) -> tuple[list[str], l
             f"unique qid_full in results ({len(latest)}) != batch.count ({total}); may indicate changed input file"
         )
 
-    # Validate each latest record points to expected artifacts
     ok_ct = 0
     failed_ct = 0
     skipped_ct = 0
     failures: list[dict] = []
 
     for qid_full, r in latest.items():
-        if "qid" not in r:
-            (errors if strict else warnings).append(f"missing qid in results record for {qid_full}")
         if "dir" not in r:
             (errors if strict else warnings).append(f"missing dir in results record for {qid_full}")
             continue
@@ -256,20 +319,27 @@ def _validate_answer_batch(run_dir: Path, *, strict: bool) -> tuple[list[str], l
             failed_ct += 1
             failures.append({"qid_full": qid_full, "error": r.get("error", "")})
 
-        # Artifact presence checks
         if okv:
-            if batch.get("params", {}).get("dry_run", False):
-                marker = q_dir / "retrieval" / "candidates.jsonl"
-            else:
-                marker = q_dir / "answer.json"
+            marker = (q_dir / "retrieval" / "candidates.jsonl") if dry_run else (q_dir / "answer.json")
             if not marker.exists():
                 errors.append(f"expected output missing for {qid_full}: {marker}")
 
-    # Compare to summary (best-effort; allow warnings if mismatch due to appended logs)
+            # If not dry-run, enforce Phase C audit artifacts for v2 runs (lightweight presence check)
+            if strict and (not dry_run):
+                meta_path = q_dir / "answer_meta.json"
+                if meta_path.exists():
+                    try:
+                        meta = _read_json(meta_path)
+                        if meta.get("schema") == "scriptorium.answer_meta.v2":
+                            _require(q_dir / "llm_request_attempt1.json", strict=True, errors=errors, warnings=warnings, label=f"{qid_full} phaseC llm_request_attempt1.json")
+                            _require(q_dir / "llm_response_attempt1.json", strict=True, errors=errors, warnings=warnings, label=f"{qid_full} phaseC llm_response_attempt1.json")
+                            _require(q_dir / "answer_raw_attempt1.txt", strict=True, errors=errors, warnings=warnings, label=f"{qid_full} phaseC answer_raw_attempt1.txt")
+                    except Exception as e:
+                        errors.append(f"{qid_full}: failed to parse answer_meta.json: {type(e).__name__}: {e}")
+
     if ok_ct != s_ok or failed_ct != s_failed or skipped_ct != s_skipped:
         (errors if strict else warnings).append(
-            f"latest results counts (ok={ok_ct}, failed={failed_ct}, skipped={skipped_ct}) "
-            f"!= summary (ok={s_ok}, failed={s_failed}, skipped={s_skipped})"
+            f"latest results counts (ok={ok_ct}, failed={failed_ct}, skipped={skipped_ct}) != summary (ok={s_ok}, failed={s_failed}, skipped={s_skipped})"
         )
 
     info["batch_sha256"] = _sha256_file(batch_path)
@@ -277,15 +347,13 @@ def _validate_answer_batch(run_dir: Path, *, strict: bool) -> tuple[list[str], l
     info["summary_sha256"] = _sha256_file(summary_path)
     info["latest_counts"] = {"ok": ok_ct, "failed": failed_ct, "skipped": skipped_ct}
     info["failures_sample"] = failures[:10]
-
     return errors, warnings, info
 
 
 def run_validate(cfg: Config, run_dir: Path, *, strict: bool = False, as_json_out: bool = False) -> int:
-    # Resolve relative to project root for convenience
     run_dir = run_dir if run_dir.is_absolute() else (cfg.project_root / run_dir).resolve()
-
     rtype = _detect_type(run_dir)
+
     if rtype == "answer_run":
         errors, warnings, info = _validate_answer_run(run_dir, strict=strict)
     elif rtype == "answer_batch":
