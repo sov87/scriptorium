@@ -117,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
             bm25_k=args.bm25_k,
             vec_k=args.vec_k,
             k_passages=args.k_passages,
+            dry_run=args.dry_run,
         )
         print(str(ans_path))
         return 0
