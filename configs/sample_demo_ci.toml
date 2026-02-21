@@ -1,10 +1,9 @@
 [root]
-# config lives in ./configs, so ".." points to repo root.
 project_root = ".."
 
 [window]
-name = "SAMPLE"
-tag = "SAMPLE"
+name = "SAMPLE_CI"
+tag = "CI"
 
 [ps]
 release_window_ps1 = "src/release_window.ps1"
@@ -17,8 +16,9 @@ vec_dir = "sample_data/indexes/vec_faiss"
 bede = "sample_data/data_proc/oe_bede_sample_utf8.jsonl"
 
 [embeddings]
-model = "intfloat/multilingual-e5-base"
-use_e5_prefix = true
+# CI uses a smaller model to reduce download time.
+model = "sentence-transformers/all-MiniLM-L6-v2"
+use_e5_prefix = false
 
 [query]
 out_parent = "sample_data/runs/query_hybrid"

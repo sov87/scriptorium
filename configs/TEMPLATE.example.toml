@@ -7,30 +7,29 @@ name = "YOUR_WINDOW"
 tag = "LOCAL"
 
 [ps]
-release_window_ps1 = 'src\release_window.ps1'
+release_window_ps1 = "src/release_window.ps1"
 
 [indexes]
-bm25 = 'indexes\bm25\oe_bede_prod_utf8.pkl'
-vec_dir = 'indexes\vec_faiss'
+bm25 = "indexes/bm25/oe_bede_prod_utf8.pkl"
+vec_dir = "indexes/vec_faiss"
 
 [canon]
-# point these to your own canonical JSONL corpora
-asc = 'data_proc\asc_A_prod.jsonl'
-bede = 'data_proc\oe_bede_prod_utf8.jsonl'
+asc = "data_proc/asc_A_prod.jsonl"
+bede = "data_proc/oe_bede_prod_utf8.jsonl"
 
 [embeddings]
-# for strict local-first, set this to a local path, not an HF id
+# For strict local-first, set this to a local path, not an HF id.
 model = "intfloat/multilingual-e5-base"
 use_e5_prefix = true
 
 [query]
-out_parent = 'runs\query_hybrid'
+out_parent = "runs/query_hybrid"
 topk = 8
 bm25_k = 24
 vec_k = 24
 
 [answer]
-out_parent = 'runs\answer_local'
+out_parent = "runs/answer_local"
 k_passages = 8
 
 [llm]
