@@ -17,6 +17,7 @@ def main():
     ap.add_argument("--asc", required=True)
     ap.add_argument("--bm25", required=True)
     ap.add_argument("--vec_dir", required=True)
+    ap.add_argument("--corpus-id", default="oe_bede_prod", help="Corpus ID prefix for index filenames")
     ap.add_argument("--model", default="intfloat/multilingual-e5-base")
     ap.add_argument("--use_e5_prefix", action="store_true")
     ap.add_argument("--topk", type=int, default=8)
@@ -24,6 +25,8 @@ def main():
     ap.add_argument("--vec_k", type=int, default=50)
     ap.add_argument("--out_dir", default="runs/retrieval_hybrid_faiss_v1")
     args = ap.parse_args()
+
+    corpus_id = args.corpus_id
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -36,9 +39,9 @@ def main():
 
     # FAISS
     vec_dir = Path(args.vec_dir)
-    index = faiss.read_index(str(vec_dir / "oe_bede_prod.index"))
+    index = faiss.read_index(str(vec_dir / f"{corpus_id}.index"))
 
-    meta_lines = (vec_dir / "oe_bede_prod_meta.jsonl").read_text(encoding="utf-8").splitlines()
+    meta_lines = (vec_dir / f"{corpus_id}_meta.jsonl").read_text(encoding="utf-8").splitlines()
     vec_meta = [json.loads(x) for x in meta_lines if x.strip()]
 
     model = SentenceTransformer(args.model)
@@ -54,7 +57,8 @@ def main():
     m_by_id = {m["id"]: m for m in vec_meta}
 
     with out_jsonl.open("w", encoding="utf-8") as fj, out_md.open("w", encoding="utf-8") as fm:
-        fm.write("# ASC → Bede candidate links (HYBRID: BM25 + FAISS)\n\n")
+        fm.write("# Candidates (HYBRID: BM25 + FAISS, RRF fusion)\n\n")
+        fm.write("_NOTE: Files are UTF-8 without BOM; in Windows PowerShell 5.1 use `Get-Content -Encoding utf8` to avoid mojibake._\n\n")
 
         for a in asc_recs:
             asc_id = a["id"]
@@ -65,12 +69,14 @@ def main():
             scores = bm25.get_scores(q_tok)
             bm_top = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[: args.bm25_k]
             bm_rank = {bm_meta[i]["id"]: r+1 for r, i in enumerate(bm_top)}
+            bm_score_by_id = {bm_meta[i]["id"]: float(scores[i]) for i in bm_top}
 
             # Vector
             q_emb = model.encode([prep_q(asc_txt)], normalize_embeddings=True, show_progress_bar=False).astype(np.float32)
             D, I = index.search(q_emb, min(args.vec_k, len(vec_meta)))
             vec_ids = [vec_meta[i]["id"] for i in I[0].tolist() if i >= 0]
             vec_rank = {bid: r+1 for r, bid in enumerate(vec_ids)}
+            vec_score_by_id = {vec_ids[pos]: float(D[0][pos]) for pos in range(len(vec_ids))}
 
             # RRF fuse
             all_ids = set(bm_rank) | set(vec_rank)
@@ -92,7 +98,12 @@ def main():
                     continue
                 cands.append({
                     "bede_id": bid,
+                    "doc_id": bid,
                     "score": float(fscore),
+                    "bm25_rank": int(bm_rank.get(bid, 0)) if bid in bm_rank else None,
+                    "vec_rank": int(vec_rank.get(bid, 0)) if bid in vec_rank else None,
+                    "bm25_score": float(bm_score_by_id[bid]) if bid in bm_score_by_id else None,
+                    "vec_score": float(vec_score_by_id[bid]) if bid in vec_score_by_id else None,
                     "loc": m["loc"],
                     "src": m["src"],
                     "srcp": m["srcp"],
@@ -104,13 +115,14 @@ def main():
                 "asc_src": a["src"],
                 "asc_srcp": a["srcp"],
                 "asc_txt": asc_txt,
+                "cand_corpus_id": corpus_id,
                 "candidates": cands,
             }
             fj.write(json.dumps(out_obj, ensure_ascii=False, separators=(",", ":")) + "\n")
 
             fm.write(f"## {asc_id}\n\n{asc_txt.strip()}\n\n### Top Bede candidates\n\n")
             for r, c in enumerate(cands, 1):
-                fm.write(f"**{r}. {c['bede_id']}** (rrf {c['score']:.6f})\n\n{c['txt'].strip()}\n\n")
+                fm.write(f"**{r}. {c['bede_id']}** (rrf {c['score']:.6f}; bm25_rank={c.get('bm25_rank')}; vec_rank={c.get('vec_rank')})\n\n{c['txt'].strip()}\n\n")
             fm.write("---\n\n")
 
     print(f"Wrote:\n  {out_jsonl}\n  {out_md}")

@@ -21,8 +21,9 @@ def main() -> int:
     ap.add_argument("--out_dir", default="")  # if empty, auto under runs\query_hybrid\q_YYYYMMDD_HHMMSS
     ap.add_argument("--bm25", default="")
     ap.add_argument("--vec_dir", default="")
+    ap.add_argument("--corpus-id", default="oe_bede_prod", help="Corpus ID prefix for BM25/FAISS artifacts (defaults preserve legacy)")
     ap.add_argument("--model", default="intfloat/multilingual-e5-base")
-    ap.add_argument("--use_e5_prefix", action="store_true", default=True)
+    ap.add_argument("--use_e5_prefix", action="store_true", default=False)
 
     # mirror your release defaults
     ap.add_argument("--topk", type=int, default=8)
@@ -34,7 +35,9 @@ def main() -> int:
     project_root = Path(__file__).resolve().parents[1]
     src_dir = project_root / "src"
 
-    bm25 = Path(args.bm25) if args.bm25 else (project_root / "indexes" / "bm25" / "oe_bede_prod_utf8.pkl")
+    corpus_id = args.corpus_id
+
+    bm25 = Path(args.bm25) if args.bm25 else (project_root / "indexes" / "bm25" / f"{corpus_id}_utf8.pkl")
     vec_dir = Path(args.vec_dir) if args.vec_dir else (project_root / "indexes" / "vec_faiss")
 
     retrieve_script = src_dir / "retrieve_bede_hybrid_faiss.py"
@@ -66,6 +69,7 @@ def main() -> int:
         "--asc", str(qfile),
         "--bm25", str(bm25),
         "--vec_dir", str(vec_dir),
+        "--corpus-id", corpus_id,
         "--model", args.model,
         "--topk", str(args.topk),
         "--bm25_k", str(args.bm25_k),
@@ -75,7 +79,7 @@ def main() -> int:
     if args.use_e5_prefix:
         cmd.append("--use_e5_prefix")
 
-        subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True)
 
     # Record what we actually used (defensible, local-first)
     meta = {

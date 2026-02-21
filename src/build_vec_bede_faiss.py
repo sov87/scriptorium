@@ -11,7 +11,9 @@ def main():
     ap.add_argument("--model", default="intfloat/multilingual-e5-base")
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--use_e5_prefix", action="store_true")
+    ap.add_argument("--corpus-id", default="oe_bede_prod", help="Corpus ID prefix for index filenames")
     args = ap.parse_args()
+    corpus_id = args.corpus_id
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -49,18 +51,22 @@ def main():
     index = faiss.IndexFlatIP(dim)
     index.add(X)
 
-    faiss.write_index(index, str(out_dir / "oe_bede_prod.index"))
+    index_path = out_dir / f"{corpus_id}.index"
+    ids_path = out_dir / f"{corpus_id}_ids.json"
+    meta_path = out_dir / f"{corpus_id}_meta.jsonl"
 
-    (out_dir / "oe_bede_prod_ids.json").write_text(
+
+    faiss.write_index(index, str(index_path))
+
+    ids_path.write_text(
         json.dumps([r["id"] for r in recs], ensure_ascii=False, separators=(",", ":")),
         encoding="utf-8"
     )
-    (out_dir / "oe_bede_prod_meta.jsonl").write_text(
+    meta_path.write_text(
         "\n".join(json.dumps(r, ensure_ascii=False, separators=(",", ":")) for r in recs) + "\n",
         encoding="utf-8"
     )
-
-    print(f"Wrote FAISS index:\n  {out_dir / 'oe_bede_prod.index'}\n  docs={len(recs)} dim={dim}\n  model={args.model}")
+    print(f"Wrote FAISS index:\n  {index_path}\n  docs={len(recs)} dim={dim}\n  model={args.model}")
 
 if __name__ == "__main__":
     main()
