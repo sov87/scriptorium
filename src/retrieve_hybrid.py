@@ -74,6 +74,23 @@ def main() -> int:
     qv = model.encode([qtxt], normalize_embeddings=True).astype("float32")
     _, I = idx.search(qv, int(args.vec_k))
     vec_ids = [ids[i] for i in I[0] if i >= 0]
+    # Enforce corpus filter for vector hits too
+    if args.corpus and vec_ids:
+        allowed: set[str] = set()
+        # SQLite has a variable limit; chunk to stay safe.
+        chunk_n = 900
+        for off in range(0, len(vec_ids), chunk_n):
+            chunk = vec_ids[off : off + chunk_n]
+            qmarks2 = ",".join(["?"] * len(chunk))
+            rows2 = con.execute(
+                f"select id from segments where corpus_id=? and id in ({qmarks2})",
+                (args.corpus, *chunk),
+            ).fetchall()
+            for r in rows2:
+                if r and isinstance(r[0], str):
+                    allowed.add(r[0])
+        vec_ids = [rid for rid in vec_ids if rid in allowed]
+
     vec_rank = {rid: i + 1 for i, rid in enumerate(vec_ids)}
 
     fused = rrf_fuse(fts_rank, vec_rank)

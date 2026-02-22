@@ -120,6 +120,28 @@ def vec_ids(vec_dir: Path, model: SentenceTransformer, q: str, k: int, use_e5_pr
     return out
 
 
+
+
+def filter_ids_by_corpus(con: sqlite3.Connection, ids: list[str], corpus: str) -> list[str]:
+    """Restrict an ID list to a single corpus, preserving order.
+
+    Chunked to avoid SQLite variable limits.
+    """
+    if not corpus or not ids:
+        return ids
+    allowed: set[str] = set()
+    chunk_n = 900
+    for off in range(0, len(ids), chunk_n):
+        chunk = ids[off : off + chunk_n]
+        qmarks = ",".join(["?"] * len(chunk))
+        rows = con.execute(
+            f"select id from segments where corpus_id=? and id in ({qmarks})",
+            (corpus, *chunk),
+        ).fetchall()
+        for r in rows:
+            if r and isinstance(r[0], str):
+                allowed.add(r[0])
+    return [rid for rid in ids if rid in allowed]
 def fetch_segments(con: sqlite3.Connection, ids: list[str]) -> list[dict[str, Any]]:
     if not ids:
         return []
@@ -244,6 +266,7 @@ def run_answer_db(a: AnswerDbArgs) -> Path:
         fts = fts_ids(con, a.query, a.fts_k, a.corpus)
         st = SentenceTransformer(a.embed_model)
         vec = vec_ids(a.vec_dir, st, a.query, a.vec_k, a.use_e5_prefix)
+        vec = filter_ids_by_corpus(con, vec, a.corpus)
         fused = rrf_fuse(fts, vec)
         top_ids = fused[: a.k]
         passages = fetch_segments(con, top_ids)
