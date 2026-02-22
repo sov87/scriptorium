@@ -1,0 +1,37 @@
+[root]
+project_root = ".."
+
+[window]
+name = "SAMPLE_CI_STRICT"
+tag = "CI"
+
+[ps]
+release_window_ps1 = "src/release_window.ps1"
+
+[indexes]
+bm25 = "sample_data/indexes/bm25/oe_bede_prod_utf8.pkl"
+vec_dir = "sample_data/indexes/vec_faiss"
+
+[canon]
+bede = "sample_data/data_proc/oe_bede_sample_utf8.jsonl"
+
+[embeddings]
+model = "models/all-MiniLM-L6-v2"
+use_e5_prefix = false
+
+[query]
+out_parent = "sample_data/runs/query_hybrid"
+topk = 5
+bm25_k = 10
+vec_k = 10
+
+[answer]
+out_parent = "sample_data/runs/answer_local"
+k_passages = 8
+
+[llm]
+base_url = "http://localhost:1234/v1"
+model = "qwen/qwen3-30b-a3b-2507"
+temperature = 0.2
+max_output_tokens = 600
+timeout_seconds = 60
