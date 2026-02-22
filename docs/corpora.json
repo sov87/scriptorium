@@ -1,11 +1,11 @@
 {
-    "generated_utc":  "2026-02-22T00:03:51Z",
+    "generated_utc":  "2026-02-22T00:43:21Z",
     "corpora":  [
                     {
                         "corpus_id":  "asc_A",
                         "title":  "Anglo-Saxon Chronicle, MS A (canon, nofm)",
                         "canon_jsonl":  {
-                                            "path":  "data_proc/asc_A_prod_nofm.jsonl",
+                                            "path":  "data_proc/asc_A_prod_v2.jsonl",
                                             "sha256":  "2FD6B50693F88FB7563C4EC8240DBD327794A7F199103EA54FCBDBFEA7043EC4",
                                             "records":  346
                                         },
