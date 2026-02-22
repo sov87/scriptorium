@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from .catalog_http import download
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -79,6 +80,13 @@ def fetch_git(root: Path, src: dict[str, Any]) -> dict[str, Any]:
     return {"ok": True, "dest": str(dest), "head": head}
 
 
+def fetch_http(root: Path, src: dict[str, Any]) -> dict[str, Any]:
+    url = str(src.get("url") or "").strip()
+    dest_rel = str(src.get("dest") or "").strip()
+    if not url or not dest_rel:
+        raise SystemExit(f"bad http source entry: {src.get('source_id')}")
+    dest = (root / dest_rel).resolve()
+    return download(url, dest)
 def fetch_manual(root: Path, src: dict[str, Any]) -> dict[str, Any]:
     dest_rel = str(src.get("dest") or "").strip()
     dest = (root / dest_rel).resolve() if dest_rel else root
@@ -109,6 +117,8 @@ def run_catalog_fetch(root: Path, source_ids: list[str] | None = None) -> Path:
         typ = str(s.get("type") or "").strip()
         if typ == "git":
             info = fetch_git(root, s)
+        elif typ == "http":
+            info = fetch_http(root, s)
         elif typ == "manual":
             info = fetch_manual(root, s)
         else:
