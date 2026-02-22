@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import pathlib
 from pathlib import Path
 
@@ -19,7 +20,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_release.add_argument("--run-retrieval", action="store_true")
     p_release.add_argument("--run-machine", action="store_true")
     p_release.add_argument("--snapshot", action="store_true")
-    p_release.add_argument("--snapshot-no-canon", action="store_true", help="When --snapshot, exclude canon JSONL files from the snapshot bundle.")
+    p_release.add_argument(
+        "--snapshot-no-canon",
+        action="store_true",
+        help="When --snapshot, exclude canon JSONL files from the snapshot bundle.",
+    )
+    p_release.add_argument(
+        "--skip-ps",
+        action="store_true",
+        help="Skip PowerShell release_window.ps1 (snapshot-only / debugging). Also enabled by env SCRIPTORIUM_SKIP_PS=1.",
+    )
     p_release.add_argument("--print-only", action="store_true", help="Print the PowerShell command but do not run it.")
 
     p_cmd = sub.add_parser("print-ps", help="Print the PowerShell command that would be executed.")
@@ -32,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_paths = sub.add_parser("paths", help="Show resolved key paths from config.")
     p_paths.add_argument("--config", required=True)
-    
+
     p_q = sub.add_parser("query", help="Run a free-text query against Bede using existing hybrid retrieval.")
     p_q.add_argument("--config", required=True)
     p_q.add_argument("--text", required=True)
@@ -40,13 +50,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_q.add_argument("--bm25-k", type=int, default=None)
     p_q.add_argument("--vec-k", type=int, default=None)
     p_q.add_argument("--out-dir", default="")
-    
+
     p_doc = sub.add_parser("doctor", help="Validate expected files/deps from config (no retrieval math).")
     p_doc.add_argument("--config", required=True)
     p_doc.add_argument("--strict", action="store_true", help="Treat warnings as failures.")
     p_doc.add_argument("--json", action="store_true", help="Print machine-readable JSON report.")
     p_doc.add_argument("--llm", action="store_true", help="Also check LLM /v1/models reachability.")
-    
+
+    p_db = sub.add_parser("db-build", help="Build derived SQLite DB from canon JSONL.")
+    p_db.add_argument("--config", required=True)
+    p_db.add_argument("--out", default="db/scriptorium.sqlite")
+    p_db.add_argument("--overwrite", action="store_true")
+
     p_a = sub.add_parser("answer", help="Retrieve then answer using local LLM (citations restricted to candidate IDs).")
     p_a.add_argument("--config", required=True)
     p_a.add_argument("--text", required=True)
@@ -67,7 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_ab.add_argument("--k-passages", type=int, default=None)
     p_ab.add_argument("--dry-run", action="store_true")
     p_ab.add_argument("--continue", dest="cont", action="store_true", help="Skip items that already have outputs.")
-    
+
     p_v = sub.add_parser("validate-run", help="Validate a run folder (answer or batch).")
     p_v.add_argument("--config", required=True)
     p_v.add_argument("--dir", required=True, help="Run folder path (answer run or batch run).")
@@ -80,20 +95,20 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cfg = load_config(args.config)
-    
+
     if args.cmd == "validate-run":
-        from pathlib import Path
+        from pathlib import Path as _Path
         from .validate_run import run_validate
-        return run_validate(cfg, Path(args.dir), strict=args.strict, as_json_out=args.json)
-    
+        return run_validate(cfg, _Path(args.dir), strict=args.strict, as_json_out=args.json)
+
     if args.cmd == "answer-batch":
-        from pathlib import Path
+        from pathlib import Path as _Path
         from .answer_batch import run_answer_batch
 
-        out_dir = Path(args.out_dir) if args.out_dir else None
+        out_dir = _Path(args.out_dir) if args.out_dir else None
         run_dir = run_answer_batch(
             cfg,
-            in_path=Path(args.in_path),
+            in_path=_Path(args.in_path),
             out_dir=out_dir,
             topk=args.topk,
             bm25_k=args.bm25_k,
@@ -101,16 +116,25 @@ def main(argv: list[str] | None = None) -> int:
             k_passages=args.k_passages,
             dry_run=args.dry_run,
             cont=args.cont,
-            config_path=Path(args.config),
+            config_path=_Path(args.config),
         )
         print(str(run_dir))
         return 0
-    
+
+    if args.cmd == "db-build":
+        import subprocess, sys
+        script = cfg.project_root / "src" / "build_sqlite_db.py"
+        cmd = [sys.executable, str(script), "--root", str(cfg.project_root), "--out", args.out]
+        if args.overwrite:
+            cmd.append("--overwrite")
+        subprocess.run(cmd, check=True)
+        return 0
+
     if args.cmd == "answer":
-        from pathlib import Path
+        from pathlib import Path as _Path
         from .answer_local import run_answer
 
-        out_dir = Path(args.out_dir) if args.out_dir else None
+        out_dir = _Path(args.out_dir) if args.out_dir else None
         ans_path = run_answer(
             cfg,
             query_text=args.text,
@@ -123,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(str(ans_path))
         return 0
-    
+
     if args.cmd == "doctor":
         from .doctor import run_doctor
         return run_doctor(cfg, strict=args.strict, as_json_out=args.json, check_llm=args.llm)
@@ -154,7 +178,6 @@ def main(argv: list[str] | None = None) -> int:
         if cfg.use_e5_prefix:
             cmd.append("--use_e5_prefix")
 
-        # If user didn’t provide an explicit out-dir, write under config out_parent with a timestamp
         if args.out_dir:
             cmd += ["--out_dir", args.out_dir]
         else:
@@ -183,36 +206,51 @@ def main(argv: list[str] | None = None) -> int:
             run_machine=args.run_machine,
             snapshot=args.snapshot,
         )
+
         if args.cmd == "print-ps" or getattr(args, "print_only", False):
             print(cmd_str)
             return 0
 
-        ret = run_release_window(
-            ps1_path=cfg.release_ps1,
-            window=cfg.window,
-            tag=cfg.tag,
-            make_subset=args.make_subset,
-            rebuild_indexes=args.rebuild_indexes,
-            run_retrieval=args.run_retrieval,
-            run_machine=args.run_machine,
-            snapshot=args.snapshot,
-        )
+        # Skip PS wrapper when debugging snapshot-only. Also supports env override.
+        skip_ps = getattr(args, "skip_ps", False) or (os.getenv("SCRIPTORIUM_SKIP_PS") == "1")
+
+        if skip_ps:
+            ret = 0
+        else:
+            ret = run_release_window(
+                ps1_path=cfg.release_ps1,
+                window=cfg.window,
+                tag=cfg.tag,
+                make_subset=args.make_subset,
+                rebuild_indexes=args.rebuild_indexes,
+                run_retrieval=args.run_retrieval,
+                run_machine=args.run_machine,
+                snapshot=args.snapshot,
+            )
+
         if args.snapshot and ret == 0:
             try:
                 from .snapshot_bundle import build_snapshot_bundle
+
                 zip_path = build_snapshot_bundle(
                     project_root=cfg.project_root,
                     window=str(cfg.window),
                     tag=str(cfg.tag),
                     config_path=pathlib.Path(args.config),
                     include_canon=(not getattr(args, "snapshot_no_canon", False)),
+                    include_extra=[
+                        "docs/RIGHTS_LEDGER.md",
+                        "docs/PROVENANCE_TEMPLATE.json",
+                    ],
                 )
                 print(str(zip_path))
             except Exception as e:
                 raise SystemExit(f"snapshot bundling failed: {type(e).__name__}: {e}")
+
         return ret
 
     raise SystemExit("unreachable")
+
 
 if __name__ == "__main__":
     raise SystemExit(main())
