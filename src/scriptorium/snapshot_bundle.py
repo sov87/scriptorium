@@ -169,11 +169,11 @@ def build_snapshot_bundle(
             if not cid:
                 continue
 
-            # Canon (optional)
+            # Canon (optional, but only if distributable)
             canon = (c.get("canon_jsonl") or {}).get("path")
-            if include_canon and canon:
+            rights = c.get("rights") or {}
+            if include_canon and canon and rights.get("distributable") is True:
                 add_rel(z, canon)
-
             # BM25
             bm25 = (c.get("bm25") or {}).get("path")
             if bm25:
