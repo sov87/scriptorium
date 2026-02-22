@@ -2,25 +2,70 @@
 
 Local-first, audit-friendly pipeline for building a structured database of Old English / Anglo-Saxon texts.
 
-## Quick demo (Windows PowerShell)
+## Reproducible demo (works from a clean checkout)
+
+This repo ships:
+
+- Tiny committed demo canon: `sample_data/data_proc/oe_bede_sample_utf8.jsonl`
+- Public registry pointing only at committed demo data: `docs/corpora.public.json`
+
+Because the default registry (`docs/corpora.json`) often points at local-only corpora under `data_proc/`, the demo and CI runs by temporarily swapping in the public registry.
+
+### Step 0 — Use the public registry (temporary swap)
+
 ```powershell
-python -m scriptorium doctor --config configs\window_0597_0865.toml --strict --json
-python -m scriptorium catalog-fetch  --config configs\window_0597_0865.toml
-python -m scriptorium catalog-ingest --config configs\window_0597_0865.toml
-python -m scriptorium db-build       --config configs\window_0597_0865.toml --overwrite
-python -m scriptorium vec-build      --config configs\window_0597_0865.toml
-python -m scriptorium db-search      --config configs\window_0597_0865.toml --q "we" --k 3 --corpus oe_beowulf_9700
-python -m scriptorium retrieve       --config configs\window_0597_0865.toml --q "What is being claimed about Scyld?" --k 5 --corpus oe_beowulf_9700
+Copy-Item docs\corpora.public.json docs\corpora.json -Force
 ```
 
-LLM answering (LM Studio):
-```powershell
-$env:SCRIPTORIUM_LLM_BASE_URL = "http://localhost:1234/v1"
-$env:SCRIPTORIUM_LLM_API_KEY  = "lm-studio"
-$env:SCRIPTORIUM_LLM_MODEL    = ""   # optional; auto-pick from /v1/models
+### Option A — Demo config (downloads embedding model during run)
 
-python -m scriptorium answer-db --config configs\window_0597_0865.toml --q "What is being claimed about Scyld?" --k 8 --corpus oe_beowulf_9700
+```powershell
+python -m scriptorium doctor    --config configs\sample_demo_ci.toml --json
+python -m scriptorium db-build  --config configs\sample_demo_ci.toml --overwrite
+python -m scriptorium vec-build --config configs\sample_demo_ci.toml --out-dir indexes\vec_faiss_global --batch 16
+python -m scriptorium db-search --config configs\sample_demo_ci.toml --q "lareow" --k 3 --corpus oe_bede_sample
+python -m scriptorium retrieve  --config configs\sample_demo_ci.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample
+python -m scriptorium answer-db --config configs\sample_demo_ci.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample --dry-run
 ```
 
-## More detail
-See docs/README_PORTFOLIO.md.
+### Option B — Strict local-first config (embedding model must already be on disk)
+
+Provision the model once (creates `models/all-MiniLM-L6-v2/`):
+
+```powershell
+python - << 'PY'
+from sentence_transformers import SentenceTransformer
+m = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+m.save("models/all-MiniLM-L6-v2")
+print("saved model -> models/all-MiniLM-L6-v2")
+PY
+```
+
+Run the same pipeline with strict doctor:
+
+```powershell
+python -m scriptorium doctor    --config configs\sample_demo_ci_strict.toml --strict --json
+python -m scriptorium db-build  --config configs\sample_demo_ci_strict.toml --overwrite
+python -m scriptorium vec-build --config configs\sample_demo_ci_strict.toml --out-dir indexes\vec_faiss_global --batch 16
+python -m scriptorium db-search --config configs\sample_demo_ci_strict.toml --q "lareow" --k 3 --corpus oe_bede_sample
+python -m scriptorium retrieve  --config configs\sample_demo_ci_strict.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample
+python -m scriptorium answer-db --config configs\sample_demo_ci_strict.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample --dry-run
+```
+
+### Step final — Restore the tracked registry file
+
+```powershell
+git checkout -- docs\corpora.json
+```
+
+## CI
+
+GitHub Actions uses the strict path:
+
+- provisions `models/all-MiniLM-L6-v2/`
+- swaps `docs/corpora.public.json` into place as `docs/corpora.json`
+- runs strict doctor + build + smoke
+
+See `.github/workflows/ci.yml` for the exact sequence.
+
+*Project creation assited by LLM use*
