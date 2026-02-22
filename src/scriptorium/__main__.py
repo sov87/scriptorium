@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import os
@@ -13,6 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="scriptorium")
     sub = p.add_subparsers(dest="cmd", required=True)
 
+    # release / print-ps
     p_release = sub.add_parser("release", help="Run release pipeline via release_window.ps1 using a TOML config.")
     p_release.add_argument("--config", required=True, help="Path to TOML config (e.g., configs/window_0597_0865.toml)")
     p_release.add_argument("--make-subset", action="store_true")
@@ -40,9 +41,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_cmd.add_argument("--run-machine", action="store_true")
     p_cmd.add_argument("--snapshot", action="store_true")
 
+    # doctor
+    p_doc = sub.add_parser("doctor", help="Validate expected files/deps from config (no retrieval math).")
+    p_doc.add_argument("--config", required=True)
+    p_doc.add_argument("--strict", action="store_true", help="Treat warnings as failures.")
+    p_doc.add_argument("--json", action="store_true", help="Print machine-readable JSON report.")
+    p_doc.add_argument("--llm", action="store_true", help="Also check LLM /v1/models reachability.")
+
+    # paths
     p_paths = sub.add_parser("paths", help="Show resolved key paths from config.")
     p_paths.add_argument("--config", required=True)
 
+    # db-build
+    p_db = sub.add_parser("db-build", help="Build derived SQLite DB from canon JSONL.")
+    p_db.add_argument("--config", required=True)
+    p_db.add_argument("--out", default="db/scriptorium.sqlite")
+    p_db.add_argument("--overwrite", action="store_true")
+
+    # db-search (FTS)
+    p_ds = sub.add_parser("db-search", help="Full-text search across all corpora (SQLite FTS5).")
+    p_ds.add_argument("--config", required=True)
+    p_ds.add_argument("--q", required=True)
+    p_ds.add_argument("--k", type=int, default=10)
+    p_ds.add_argument("--corpus", default="")
+
+    # init-corpus
+    p_ic = sub.add_parser("init-corpus", help="Create skeleton files for a new corpus_id and register it.")
+    p_ic.add_argument("--config", required=True)
+    p_ic.add_argument("--id", required=True, dest="corpus_id")
+    p_ic.add_argument("--title", required=True)
+
+    # query (legacy external script)
     p_q = sub.add_parser("query", help="Run a free-text query against Bede using existing hybrid retrieval.")
     p_q.add_argument("--config", required=True)
     p_q.add_argument("--text", required=True)
@@ -51,17 +80,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_q.add_argument("--vec-k", type=int, default=None)
     p_q.add_argument("--out-dir", default="")
 
-    p_doc = sub.add_parser("doctor", help="Validate expected files/deps from config (no retrieval math).")
-    p_doc.add_argument("--config", required=True)
-    p_doc.add_argument("--strict", action="store_true", help="Treat warnings as failures.")
-    p_doc.add_argument("--json", action="store_true", help="Print machine-readable JSON report.")
-    p_doc.add_argument("--llm", action="store_true", help="Also check LLM /v1/models reachability.")
-
-    p_db = sub.add_parser("db-build", help="Build derived SQLite DB from canon JSONL.")
-    p_db.add_argument("--config", required=True)
-    p_db.add_argument("--out", default="db/scriptorium.sqlite")
-    p_db.add_argument("--overwrite", action="store_true")
-
+    # answer (if present in your project)
     p_a = sub.add_parser("answer", help="Retrieve then answer using local LLM (citations restricted to candidate IDs).")
     p_a.add_argument("--config", required=True)
     p_a.add_argument("--text", required=True)
@@ -88,11 +107,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_v.add_argument("--dir", required=True, help="Run folder path (answer run or batch run).")
     p_v.add_argument("--strict", action="store_true", help="Treat warnings as failures.")
     p_v.add_argument("--json", action="store_true", help="Print JSON report.")
-    
-    p_ic = sub.add_parser("init-corpus", help="Create skeleton files for a new corpus_id and register it.")
-    p_ic.add_argument("--config", required=True)
-    p_ic.add_argument("--id", required=True, dest="corpus_id")
-    p_ic.add_argument("--title", required=True)
 
     return p
 
@@ -100,14 +114,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cfg = load_config(args.config)
-    
-    if args.cmd == "init-corpus":
-        from .init_corpus import init_corpus
-        paths = init_corpus(cfg.project_root, corpus_id=args.corpus_id, title=args.title)
-        print(str(paths.provenance))
-        print(str(paths.sources))
-        print(str(paths.ingest_stub))
-        return 0
 
     if args.cmd == "validate-run":
         from pathlib import Path as _Path
@@ -134,15 +140,6 @@ def main(argv: list[str] | None = None) -> int:
         print(str(run_dir))
         return 0
 
-    if args.cmd == "db-build":
-        import subprocess, sys
-        script = cfg.project_root / "src" / "build_sqlite_db.py"
-        cmd = [sys.executable, str(script), "--root", str(cfg.project_root), "--out", args.out]
-        if args.overwrite:
-            cmd.append("--overwrite")
-        subprocess.run(cmd, check=True)
-        return 0
-
     if args.cmd == "answer":
         from pathlib import Path as _Path
         from .answer_local import run_answer
@@ -165,12 +162,45 @@ def main(argv: list[str] | None = None) -> int:
         from .doctor import run_doctor
         return run_doctor(cfg, strict=args.strict, as_json_out=args.json, check_llm=args.llm)
 
+    if args.cmd == "paths":
+        print(f"project_root: {cfg.project_root}")
+        print(f"window: {cfg.window}")
+        print(f"tag: {cfg.tag}")
+        print(f"release_ps1: {cfg.release_ps1}")
+        return 0
+
+    if args.cmd == "db-build":
+        import subprocess
+        import sys
+
+        script = cfg.project_root / "src" / "build_sqlite_db.py"
+        cmd = [sys.executable, str(script), "--root", str(cfg.project_root), "--out", args.out]
+        if args.overwrite:
+            cmd.append("--overwrite")
+        subprocess.run(cmd, check=True)
+        return 0
+
+    if args.cmd == "db-search":
+        from .db_search_fts import run_db_search
+
+        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
+        return run_db_search(db_path, q=args.q, k=args.k, corpus=args.corpus)
+
+    if args.cmd == "init-corpus":
+        from .init_corpus import init_corpus
+
+        paths = init_corpus(cfg.project_root, corpus_id=args.corpus_id, title=args.title)
+        print(str(paths.provenance))
+        print(str(paths.sources))
+        print(str(paths.ingest_stub))
+        return 0
+
     if args.cmd == "query":
         import sys
         import subprocess
         from datetime import datetime
 
-        script = (cfg.project_root / "src" / "query_bede_hybrid_faiss.py")
+        script = cfg.project_root / "src" / "query_bede_hybrid_faiss.py"
 
         topk = cfg.query_topk if args.topk is None else args.topk
         bm25_k = cfg.query_bm25_k if args.bm25_k is None else args.bm25_k
@@ -201,13 +231,6 @@ def main(argv: list[str] | None = None) -> int:
         subprocess.run(cmd, check=True)
         return 0
 
-    if args.cmd == "paths":
-        print(f"project_root: {cfg.project_root}")
-        print(f"window: {cfg.window}")
-        print(f"tag: {cfg.tag}")
-        print(f"release_ps1: {cfg.release_ps1}")
-        return 0
-
     if args.cmd in ("print-ps", "release"):
         cmd_str = format_release_window_cmd(
             ps1_path=cfg.release_ps1,
@@ -224,9 +247,7 @@ def main(argv: list[str] | None = None) -> int:
             print(cmd_str)
             return 0
 
-        # Skip PS wrapper when debugging snapshot-only. Also supports env override.
         skip_ps = getattr(args, "skip_ps", False) or (os.getenv("SCRIPTORIUM_SKIP_PS") == "1")
-
         if skip_ps:
             ret = 0
         else:
@@ -242,23 +263,20 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         if args.snapshot and ret == 0:
-            try:
-                from .snapshot_bundle import build_snapshot_bundle
+            from .snapshot_bundle import build_snapshot_bundle
 
-                zip_path = build_snapshot_bundle(
-                    project_root=cfg.project_root,
-                    window=str(cfg.window),
-                    tag=str(cfg.tag),
-                    config_path=pathlib.Path(args.config),
-                    include_canon=(not getattr(args, "snapshot_no_canon", False)),
-                    include_extra=[
-                        "docs/RIGHTS_LEDGER.md",
-                        "docs/PROVENANCE_TEMPLATE.json",
-                    ],
-                )
-                print(str(zip_path))
-            except Exception as e:
-                raise SystemExit(f"snapshot bundling failed: {type(e).__name__}: {e}")
+            zip_path = build_snapshot_bundle(
+                project_root=cfg.project_root,
+                window=str(cfg.window),
+                tag=str(cfg.tag),
+                config_path=pathlib.Path(args.config),
+                include_canon=(not getattr(args, "snapshot_no_canon", False)),
+                include_extra=[
+                    "docs/RIGHTS_LEDGER.md",
+                    "docs/PROVENANCE_TEMPLATE.json",
+                ],
+            )
+            print(str(zip_path))
 
         return ret
 
