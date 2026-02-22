@@ -111,6 +111,50 @@ def init_db(conn: sqlite3.Connection) -> None:
         """
     )
 
+def rebuild_segments_fts(conn: sqlite3.Connection) -> None:
+    """
+    Build segments_fts (FTS5) from segments. Deterministic: drop + recreate each db-build.
+    Column order is fixed with text first to keep snippet()/highlight() column indices stable.
+    """
+    # Drop old FTS table if present
+    conn.execute("DROP TABLE IF EXISTS segments_fts;")
+
+    # Ensure FTS5 is available (will throw if not)
+    conn.execute("CREATE VIRTUAL TABLE __fts_probe USING fts5(x);")
+    conn.execute("DROP TABLE __fts_probe;")
+
+    # Fixed schema: text indexed; everything else UNINDEXED metadata for filtering/printing
+    conn.execute(
+        """
+        CREATE VIRTUAL TABLE segments_fts USING fts5(
+          text,
+          corpus_id UNINDEXED,
+          work_id UNINDEXED,
+          loc UNINDEXED,
+          id UNINDEXED,
+          witness_id UNINDEXED,
+          edition_id UNINDEXED,
+          lang UNINDEXED,
+          text_norm UNINDEXED,
+          source_refs_json UNINDEXED,
+          notes_json UNINDEXED,
+          record_json UNINDEXED
+        );
+        """
+    )
+
+    conn.execute(
+        """
+        INSERT INTO segments_fts(
+          text, corpus_id, work_id, loc, id, witness_id, edition_id, lang,
+          text_norm, source_refs_json, notes_json, record_json
+        )
+        SELECT
+          text, corpus_id, work_id, loc, id, witness_id, edition_id, lang,
+          text_norm, source_refs_json, notes_json, record_json
+        FROM segments;
+        """
+    )
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -200,6 +244,7 @@ def main() -> int:
                 buf,
             )
 
+        rebuild_segments_fts(conn)
         conn.commit()
         print(str(out_path))
         print(f"[OK] corpora={len(corpora)} segments={total}")
