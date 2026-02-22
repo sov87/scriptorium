@@ -1,0 +1,65 @@
+﻿{
+  "schema": "scriptorium.sources_catalog.v1",
+  "generated_utc": "",
+  "sources": [
+    {
+      "source_id": "echoe_repo",
+      "type": "git",
+      "repo": "https://github.com/ECHOEProject/echoe.git",
+      "dest": "data_raw/echoe_repo",
+      "ref": "",
+      "license": "GPL-3.0",
+      "distributable": true,
+      "notes": "Shared source for echoe plaintext + TEI ingests."
+    },
+    {
+      "source_id": "beowulf_9700_manual",
+      "type": "manual",
+      "repo": "",
+      "url": "",
+      "dest": "data_raw/oe_beowulf_9700",
+      "ref": "",
+      "license": "Project Gutenberg License",
+      "distributable": true,
+      "notes": "You already ingested; keep manual unless you want automated download later."
+    },
+    {
+      "source_id": "asc_A_manual",
+      "type": "manual",
+      "repo": "",
+      "url": "",
+      "dest": "data_raw/asc_A",
+      "ref": "",
+      "license": "UNVERIFIED",
+      "distributable": false,
+      "notes": "Local-only until rights are verified."
+    },
+    {
+      "source_id": "oe_bede_manual",
+      "type": "manual",
+      "repo": "",
+      "url": "",
+      "dest": "data_raw/oe_bede",
+      "ref": "",
+      "license": "UNVERIFIED",
+      "distributable": false,
+      "notes": "Local-only until rights are verified."
+    }
+  ],
+  "ingests": [
+    {
+      "corpus_id": "echoe",
+      "source_id": "echoe_repo",
+      "enabled": true,
+      "cmd": ["{python}", "src/ingest/ingest_echoe_plaintext.py", "--root", "{root}", "--in-dir", "data_raw/echoe_repo/plaintext", "--out", "data_proc/echoe_prod.jsonl"],
+      "outputs": ["data_proc/echoe_prod.jsonl"]
+    },
+    {
+      "corpus_id": "echoe_tei",
+      "source_id": "echoe_repo",
+      "enabled": true,
+      "cmd": ["{python}", "src/ingest/ingest_echoe_tei.py", "--root", "{root}", "--in-dir", "data_raw/echoe_repo/xml", "--out", "data_proc/echoe_tei_prod.jsonl"],
+      "outputs": ["data_proc/echoe_tei_prod.jsonl"]
+    }
+  ]
+}

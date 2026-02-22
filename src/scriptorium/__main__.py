@@ -3,10 +3,15 @@
 import argparse
 import os
 import pathlib
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import load_config
 from .ps_bridge import run_release_window, format_release_window_cmd
+
+
+def _utc_stamp() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -14,7 +19,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # release / print-ps
-    p_release = sub.add_parser("release", help="Run release pipeline via release_window.ps1 using a TOML config.")
+    p_release = sub.add_parser("release")
     p_release.add_argument("--config", required=True)
     p_release.add_argument("--make-subset", action="store_true")
     p_release.add_argument("--rebuild-indexes", action="store_true")
@@ -25,7 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_release.add_argument("--skip-ps", action="store_true")
     p_release.add_argument("--print-only", action="store_true")
 
-    p_cmd = sub.add_parser("print-ps", help="Print the PowerShell command that would be executed.")
+    p_cmd = sub.add_parser("print-ps")
     p_cmd.add_argument("--config", required=True)
     p_cmd.add_argument("--make-subset", action="store_true")
     p_cmd.add_argument("--rebuild-indexes", action="store_true")
@@ -33,51 +38,48 @@ def build_parser() -> argparse.ArgumentParser:
     p_cmd.add_argument("--run-machine", action="store_true")
     p_cmd.add_argument("--snapshot", action="store_true")
 
-    # doctor
-    p_doc = sub.add_parser("doctor", help="Validate expected files/deps from config.")
+    # doctor / paths
+    p_doc = sub.add_parser("doctor")
     p_doc.add_argument("--config", required=True)
     p_doc.add_argument("--strict", action="store_true")
     p_doc.add_argument("--json", action="store_true")
     p_doc.add_argument("--llm", action="store_true")
 
-    # paths
-    p_paths = sub.add_parser("paths", help="Show resolved key paths from config.")
+    p_paths = sub.add_parser("paths")
     p_paths.add_argument("--config", required=True)
 
-    # db-build
-    p_db = sub.add_parser("db-build", help="Build derived SQLite DB from canon JSONL.")
+    # db-build / db-search
+    p_db = sub.add_parser("db-build")
     p_db.add_argument("--config", required=True)
     p_db.add_argument("--out", default="db/scriptorium.sqlite")
     p_db.add_argument("--overwrite", action="store_true")
 
-    # db-search
-    p_ds = sub.add_parser("db-search", help="Full-text search across all corpora (SQLite FTS5).")
+    p_ds = sub.add_parser("db-search")
     p_ds.add_argument("--config", required=True)
     p_ds.add_argument("--q", required=True)
     p_ds.add_argument("--k", type=int, default=10)
     p_ds.add_argument("--corpus", default="")
 
-    # vec-build
-    p_vb = sub.add_parser("vec-build", help="Build global FAISS index over segments.")
+    # vec-build / retrieve
+    p_vb = sub.add_parser("vec-build")
     p_vb.add_argument("--config", required=True)
     p_vb.add_argument("--out-dir", default="indexes/vec_faiss_global")
     p_vb.add_argument("--batch", type=int, default=256)
 
-    # retrieve
-    p_r = sub.add_parser("retrieve", help="Hybrid retrieval (FTS + FAISS + RRF).")
+    p_r = sub.add_parser("retrieve")
     p_r.add_argument("--config", required=True)
     p_r.add_argument("--q", required=True)
     p_r.add_argument("--k", type=int, default=10)
     p_r.add_argument("--corpus", default="")
 
     # init-corpus
-    p_ic = sub.add_parser("init-corpus", help="Create skeleton files for a new corpus_id and register it.")
+    p_ic = sub.add_parser("init-corpus")
     p_ic.add_argument("--config", required=True)
     p_ic.add_argument("--id", required=True, dest="corpus_id")
     p_ic.add_argument("--title", required=True)
 
-    # answer-db
-    p_ad = sub.add_parser("answer-db", help="Hybrid retrieve then answer via local LLM (LM Studio).")
+    # answer-db / answer-batch-db
+    p_ad = sub.add_parser("answer-db")
     p_ad.add_argument("--config", required=True)
     p_ad.add_argument("--q", required=True)
     p_ad.add_argument("--k", type=int, default=10)
@@ -91,8 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_ad.add_argument("--max-tokens", type=int, default=900)
     p_ad.add_argument("--temperature", type=float, default=0.2)
 
-    # answer-batch-db
-    p_abd = sub.add_parser("answer-batch-db", help="Run multiple answer-db queries from a file (one per line).")
+    p_abd = sub.add_parser("answer-batch-db")
     p_abd.add_argument("--config", required=True)
     p_abd.add_argument("--in", dest="in_path", required=True)
     p_abd.add_argument("--out-root", default="runs/answer_batch_db")
@@ -107,6 +108,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_abd.add_argument("--llm-model", default="")
     p_abd.add_argument("--max-tokens", type=int, default=900)
     p_abd.add_argument("--temperature", type=float, default=0.2)
+
+    # catalog
+    p_cs = sub.add_parser("catalog-status")
+    p_cs.add_argument("--config", required=True)
+
+    p_cf = sub.add_parser("catalog-fetch")
+    p_cf.add_argument("--config", required=True)
+    p_cf.add_argument("--source-id", action="append", default=[])
+
+    p_ci = sub.add_parser("catalog-ingest")
+    p_ci.add_argument("--config", required=True)
+    p_ci.add_argument("--corpus-id", action="append", default=[])
 
     return p
 
@@ -232,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
         llm_base = args.llm_base_url.strip() if args.llm_base_url else os.getenv("SCRIPTORIUM_LLM_BASE_URL", "http://localhost:1234/v1")
         llm_model = args.llm_model.strip() if args.llm_model else os.getenv("SCRIPTORIUM_LLM_MODEL", "")
         llm_key = os.getenv("SCRIPTORIUM_LLM_API_KEY", "lm-studio")
-        run_id = args.run_id.strip()
+        run_id = args.run_id.strip() if args.run_id.strip() else (_utc_stamp() + "_batch")
 
         a = BatchArgs(
             project_root=cfg.project_root,
@@ -242,7 +255,7 @@ def main(argv: list[str] | None = None) -> int:
             use_e5_prefix=bool(getattr(cfg, "use_e5_prefix", False)),
             queries_path=(cfg.project_root / args.in_path).resolve() if not Path(args.in_path).is_absolute() else Path(args.in_path),
             out_root=(cfg.project_root / args.out_root).resolve(),
-            run_id=run_id if run_id else (datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S") + "_batch"),
+            run_id=run_id,
             k=int(args.k),
             fts_k=int(args.fts_k),
             vec_k=int(args.vec_k),
@@ -257,6 +270,21 @@ def main(argv: list[str] | None = None) -> int:
         )
         run_answer_batch_db(a)
         return 0
+
+    if args.cmd == "catalog-status":
+        from .catalog_ops import run_catalog_status
+        return run_catalog_status(cfg.project_root)
+
+    if args.cmd == "catalog-fetch":
+        from .catalog_ops import run_catalog_fetch
+        src_ids = [x for x in (args.source_id or []) if x]
+        run_catalog_fetch(cfg.project_root, source_ids=src_ids if src_ids else None)
+        return 0
+
+    if args.cmd == "catalog-ingest":
+        from .catalog_ops import run_catalog_ingest
+        cids = [x for x in (args.corpus_id or []) if x]
+        return run_catalog_ingest(cfg.project_root, corpus_ids=cids if cids else None)
 
     if args.cmd in ("print-ps", "release"):
         cmd_str = format_release_window_cmd(
