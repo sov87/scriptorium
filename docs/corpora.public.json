@@ -1,0 +1,11 @@
+{
+  "generated_utc": "2026-02-21T00:00:00Z",
+  "corpora": [
+    {
+      "corpus_id": "oe_bede_sample",
+      "title": "Old English Bede (CI sample)",
+      "canon_jsonl": { "path": "sample_data/data_proc/oe_bede_sample_utf8.jsonl" },
+      "rights": { "tier": "A_demo", "license": "Demo sample data", "distributable": true }
+    }
+  ]
+}

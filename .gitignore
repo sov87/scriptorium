@@ -86,3 +86,9 @@ configs/private/
 # -------------------------
 *.log
 logs/
+
+# -------------------------
+# CI/demo allowlist (commit only this one canon file)
+# -------------------------
+!sample_data/data_proc/
+!sample_data/data_proc/oe_bede_sample_utf8.jsonl
