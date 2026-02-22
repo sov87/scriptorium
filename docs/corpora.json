@@ -1,5 +1,5 @@
 {
-    "generated_utc":  "2026-02-22T00:43:21Z",
+    "generated_utc":  "2026-02-22T00:56:23Z",
     "corpora":  [
                     {
                         "corpus_id":  "asc_A",
@@ -76,6 +76,26 @@
                         "canon_jsonl":  {
                                             "path":  "data_proc/echoe_prod.jsonl"
                                         }
+                    },
+                    {
+                        "corpus_id":  "echoe_tei",
+                        "title":  "ECHOE (TEI XML ingest)",
+                        "canon_jsonl":  {
+                                            "path":  "data_proc/echoe_tei_prod.jsonl"
+                                        },
+                        "rights":  {
+                                       "tier":  "A_open_license",
+                                       "license":  "GPL-3.0",
+                                       "distributable":  true
+                                   },
+                        "bm25":  {
+                                     "path":  ""
+                                 },
+                        "faiss":  {
+                                      "index_path":  "",
+                                      "ids_path":  "",
+                                      "meta_path":  ""
+                                  }
                     }
                 ]
 }
