@@ -1,14 +1,27 @@
 ﻿from __future__ import annotations
-import argparse, json, sqlite3
-from pathlib import Path
 
-import numpy as np
+import argparse
+import json
+import re
+import sqlite3
+from pathlib import Path
+from typing import Any
+
 import faiss
 from sentence_transformers import SentenceTransformer
 
 
-def rrf_fuse(rank_a: dict[str,int], rank_b: dict[str,int], k: int = 60) -> list[tuple[str,float]]:
-    scores = {}
+FTS_TOKEN_RE = re.compile(r"[0-9A-Za-z\u00C0-\u024F\u1E00-\u1EFFþðæǣÞÐÆǢ]+")
+
+
+def fts_query(q: str) -> str:
+    # FTS5 MATCH is not free text; punctuation like ? can break parsing.
+    toks = FTS_TOKEN_RE.findall(q)
+    return " ".join(toks) if toks else q
+
+
+def rrf_fuse(rank_a: dict[str, int], rank_b: dict[str, int], k: int = 60) -> list[tuple[str, float]]:
+    scores: dict[str, float] = {}
     for rid, r in rank_a.items():
         scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + r)
     for rid, r in rank_b.items():
@@ -29,22 +42,27 @@ def main() -> int:
     ap.add_argument("--corpus", default="")
     args = ap.parse_args()
 
-    db = args.db
-    con = sqlite3.connect(db)
+    con = sqlite3.connect(args.db)
 
-    # FTS hits -> rank dict
-    where = "segments_fts match ?"
-    params = [args.q]
-    if args.corpus:
-        where += " and corpus_id=?"
-        params.append(args.corpus)
+    # FTS hits -> rank dict (never crash on syntax; just fall back to empty)
+    fts_ids: list[str] = []
+    try:
+        q2 = fts_query(args.q)
+        where = "segments_fts match ?"
+        params: list[Any] = [q2]
+        if args.corpus:
+            where += " and corpus_id=?"
+            params.append(args.corpus)
 
-    fts_rows = con.execute(
-        f"select id from segments_fts where {where} order by bm25(segments_fts) limit ?",
-        (*params, args.fts_k),
-    ).fetchall()
-    fts_ids = [r[0] for r in fts_rows]
-    fts_rank = {rid: i+1 for i, rid in enumerate(fts_ids)}
+        fts_rows = con.execute(
+            f"select id from segments_fts where {where} order by bm25(segments_fts) limit ?",
+            (*params, int(args.fts_k)),
+        ).fetchall()
+        fts_ids = [r[0] for r in fts_rows if r and isinstance(r[0], str)]
+    except sqlite3.OperationalError:
+        fts_ids = []
+
+    fts_rank = {rid: i + 1 for i, rid in enumerate(fts_ids)}
 
     # Vector hits
     vec_dir = Path(args.vec_dir)
@@ -54,12 +72,17 @@ def main() -> int:
     model = SentenceTransformer(args.model)
     qtxt = ("query: " + args.q) if args.use_e5_prefix else args.q
     qv = model.encode([qtxt], normalize_embeddings=True).astype("float32")
-    D, I = idx.search(qv, args.vec_k)
+    _, I = idx.search(qv, int(args.vec_k))
     vec_ids = [ids[i] for i in I[0] if i >= 0]
-    vec_rank = {rid: i+1 for i, rid in enumerate(vec_ids)}
+    vec_rank = {rid: i + 1 for i, rid in enumerate(vec_ids)}
 
     fused = rrf_fuse(fts_rank, vec_rank)
-    top = [rid for rid, _ in fused[: args.k]]
+    top = [rid for rid, _ in fused[: int(args.k)]]
+
+    if not top:
+        print("[OK] 0 results")
+        con.close()
+        return 0
 
     # Fetch records
     qmarks = ",".join(["?"] * len(top))
@@ -69,7 +92,6 @@ def main() -> int:
     ).fetchall()
     con.close()
 
-    # keep fused order
     by_id = {r[1]: r for r in rows}
     for rid in top:
         r = by_id.get(rid)
