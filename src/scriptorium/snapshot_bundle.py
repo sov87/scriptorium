@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import platform
@@ -16,7 +16,7 @@ def _utc_now() -> str:
 
 
 # Always include these roots in every snapshot (defensible/reconstructible).
-ALWAYS_INCLUDE_DIRS = ("src", "configs", "docs")
+ALWAYS_INCLUDE_DIRS = ("src", "configs", "docs", "db")
 
 # Never include these dirs anywhere in the zip (even if found under included roots).
 EXCLUDE_DIRNAMES = {
@@ -29,7 +29,7 @@ EXCLUDE_DIRNAMES = {
 }
 
 # Never include these file types/names.
-EXCLUDE_SUFFIXES = {".pyc", ".pyo"}
+EXCLUDE_SUFFIXES = {".pyc", ".pyo", ".sqlite-wal", ".sqlite-shm"}
 EXCLUDE_FILENAMES = {".DS_Store"}
 
 
