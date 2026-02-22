@@ -15,11 +15,10 @@ jobs:
           python-version: "3.12"
           cache: "pip"
 
-      - name: Install deps (do not use requirements.txt yet)
+      - name: Install package (runtime deps via pyproject)
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install numpy faiss-cpu sentence-transformers rank-bm25
 
       - name: Prepare local embedding model for strict doctor
         run: |
@@ -37,9 +36,9 @@ jobs:
 
       - name: Doctor (strict) + build + smoke
         run: |
-          python -m scriptorium doctor   --config configs/sample_demo_ci_strict.toml --strict --json
+          python -m scriptorium doctor --config configs/sample_demo_ci_strict.toml --strict --json
           python -m scriptorium db-build --config configs/sample_demo_ci_strict.toml --overwrite
           python -m scriptorium vec-build --config configs/sample_demo_ci_strict.toml --out-dir indexes/vec_faiss_global --batch 16
           python -m scriptorium db-search --config configs/sample_demo_ci_strict.toml --q "lareow" --k 3 --corpus oe_bede_sample
-          python -m scriptorium retrieve  --config configs/sample_demo_ci_strict.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample
+          python -m scriptorium retrieve --config configs/sample_demo_ci_strict.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample
           python -m scriptorium answer-db --config configs/sample_demo_ci_strict.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample --dry-run

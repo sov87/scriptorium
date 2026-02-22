@@ -1,12 +1,27 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "scriptorium"
 version = "0.1.0"
+description = "Local-first, audit-friendly pipeline for building a structured database of Old English / Anglo-Saxon texts."
+readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+  "numpy>=1.26",
+  "sentence-transformers>=2.6,<3",
+  "faiss-cpu>=1.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.5.0",
+  "black>=24.0.0",
+]
+ci = [
+  "ruff>=0.5.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
