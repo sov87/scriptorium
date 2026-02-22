@@ -65,48 +65,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_ds.add_argument("--k", type=int, default=10)
     p_ds.add_argument("--corpus", default="")
 
+    # vec-build (global)
+    p_vb = sub.add_parser("vec-build", help="Build global FAISS index over segments.")
+    p_vb.add_argument("--config", required=True)
+    p_vb.add_argument("--out-dir", default="indexes/vec_faiss_global")
+    p_vb.add_argument("--batch", type=int, default=256)
+
+    # retrieve (hybrid)
+    p_r = sub.add_parser("retrieve", help="Hybrid retrieval (FTS + FAISS + RRF).")
+    p_r.add_argument("--config", required=True)
+    p_r.add_argument("--q", required=True)
+    p_r.add_argument("--k", type=int, default=10)
+    p_r.add_argument("--corpus", default="")
+
     # init-corpus
     p_ic = sub.add_parser("init-corpus", help="Create skeleton files for a new corpus_id and register it.")
     p_ic.add_argument("--config", required=True)
     p_ic.add_argument("--id", required=True, dest="corpus_id")
     p_ic.add_argument("--title", required=True)
-
-    # query (legacy external script)
-    p_q = sub.add_parser("query", help="Run a free-text query against Bede using existing hybrid retrieval.")
-    p_q.add_argument("--config", required=True)
-    p_q.add_argument("--text", required=True)
-    p_q.add_argument("--topk", type=int, default=None)
-    p_q.add_argument("--bm25-k", type=int, default=None)
-    p_q.add_argument("--vec-k", type=int, default=None)
-    p_q.add_argument("--out-dir", default="")
-
-    # answer (if present in your project)
-    p_a = sub.add_parser("answer", help="Retrieve then answer using local LLM (citations restricted to candidate IDs).")
-    p_a.add_argument("--config", required=True)
-    p_a.add_argument("--text", required=True)
-    p_a.add_argument("--out-dir", default="")
-    p_a.add_argument("--topk", type=int, default=None)
-    p_a.add_argument("--bm25-k", type=int, default=None)
-    p_a.add_argument("--vec-k", type=int, default=None)
-    p_a.add_argument("--k-passages", type=int, default=None)
-    p_a.add_argument("--dry-run", action="store_true", help="Run retrieval only; do not call the LLM.")
-
-    p_ab = sub.add_parser("answer-batch", help="Run multiple answers from an input file (one query per line).")
-    p_ab.add_argument("--config", required=True)
-    p_ab.add_argument("--in", dest="in_path", required=True, help="Text file with one query per line.")
-    p_ab.add_argument("--out-dir", default="")
-    p_ab.add_argument("--topk", type=int, default=None)
-    p_ab.add_argument("--bm25-k", type=int, default=None)
-    p_ab.add_argument("--vec-k", type=int, default=None)
-    p_ab.add_argument("--k-passages", type=int, default=None)
-    p_ab.add_argument("--dry-run", action="store_true")
-    p_ab.add_argument("--continue", dest="cont", action="store_true", help="Skip items that already have outputs.")
-
-    p_v = sub.add_parser("validate-run", help="Validate a run folder (answer or batch).")
-    p_v.add_argument("--config", required=True)
-    p_v.add_argument("--dir", required=True, help="Run folder path (answer run or batch run).")
-    p_v.add_argument("--strict", action="store_true", help="Treat warnings as failures.")
-    p_v.add_argument("--json", action="store_true", help="Print JSON report.")
 
     return p
 
@@ -114,49 +90,6 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cfg = load_config(args.config)
-
-    if args.cmd == "validate-run":
-        from pathlib import Path as _Path
-        from .validate_run import run_validate
-        return run_validate(cfg, _Path(args.dir), strict=args.strict, as_json_out=args.json)
-
-    if args.cmd == "answer-batch":
-        from pathlib import Path as _Path
-        from .answer_batch import run_answer_batch
-
-        out_dir = _Path(args.out_dir) if args.out_dir else None
-        run_dir = run_answer_batch(
-            cfg,
-            in_path=_Path(args.in_path),
-            out_dir=out_dir,
-            topk=args.topk,
-            bm25_k=args.bm25_k,
-            vec_k=args.vec_k,
-            k_passages=args.k_passages,
-            dry_run=args.dry_run,
-            cont=args.cont,
-            config_path=_Path(args.config),
-        )
-        print(str(run_dir))
-        return 0
-
-    if args.cmd == "answer":
-        from pathlib import Path as _Path
-        from .answer_local import run_answer
-
-        out_dir = _Path(args.out_dir) if args.out_dir else None
-        ans_path = run_answer(
-            cfg,
-            query_text=args.text,
-            out_dir=out_dir,
-            topk=args.topk,
-            bm25_k=args.bm25_k,
-            vec_k=args.vec_k,
-            k_passages=args.k_passages,
-            dry_run=args.dry_run,
-        )
-        print(str(ans_path))
-        return 0
 
     if args.cmd == "doctor":
         from .doctor import run_doctor
@@ -186,6 +119,72 @@ def main(argv: list[str] | None = None) -> int:
         db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         return run_db_search(db_path, q=args.q, k=args.k, corpus=args.corpus)
 
+    if args.cmd == "vec-build":
+        import subprocess
+        import sys
+
+        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
+        out_dir = (cfg.project_root / args.out_dir).resolve()
+
+        model = getattr(cfg, "embed_model", None)
+        if model is None:
+            model = cfg.project_root / "models" / "multilingual-e5-base"
+        model = str(model)
+
+        script = cfg.project_root / "src" / "build_vec_index_global.py"
+        cmd = [
+            sys.executable,
+            str(script),
+            "--db",
+            str(db_path),
+            "--out-dir",
+            str(out_dir),
+            "--model",
+            model,
+            "--batch",
+            str(args.batch),
+        ]
+        if getattr(cfg, "use_e5_prefix", False):
+            cmd.append("--use-e5-prefix")
+
+        subprocess.run(cmd, check=True)
+        return 0
+
+    if args.cmd == "retrieve":
+        import subprocess
+        import sys
+
+        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
+        vec_dir = (cfg.project_root / "indexes" / "vec_faiss_global").resolve()
+
+        model = getattr(cfg, "embed_model", None)
+        if model is None:
+            model = cfg.project_root / "models" / "multilingual-e5-base"
+        model = str(model)
+
+        script = cfg.project_root / "src" / "retrieve_hybrid.py"
+        cmd = [
+            sys.executable,
+            str(script),
+            "--db",
+            str(db_path),
+            "--q",
+            args.q,
+            "--k",
+            str(args.k),
+            "--vec-dir",
+            str(vec_dir),
+            "--model",
+            model,
+        ]
+        if getattr(cfg, "use_e5_prefix", False):
+            cmd.append("--use-e5-prefix")
+        if args.corpus:
+            cmd += ["--corpus", args.corpus]
+
+        subprocess.run(cmd, check=True)
+        return 0
+
     if args.cmd == "init-corpus":
         from .init_corpus import init_corpus
 
@@ -193,42 +192,6 @@ def main(argv: list[str] | None = None) -> int:
         print(str(paths.provenance))
         print(str(paths.sources))
         print(str(paths.ingest_stub))
-        return 0
-
-    if args.cmd == "query":
-        import sys
-        import subprocess
-        from datetime import datetime
-
-        script = cfg.project_root / "src" / "query_bede_hybrid_faiss.py"
-
-        topk = cfg.query_topk if args.topk is None else args.topk
-        bm25_k = cfg.query_bm25_k if args.bm25_k is None else args.bm25_k
-        vec_k = cfg.query_vec_k if args.vec_k is None else args.vec_k
-
-        cmd = [
-            sys.executable,
-            str(script),
-            "--query", args.text,
-            "--topk", str(topk),
-            "--bm25_k", str(bm25_k),
-            "--vec_k", str(vec_k),
-            "--bm25", str(cfg.bm25_path),
-            "--vec_dir", str(cfg.vec_dir),
-            "--model", str(cfg.embed_model),
-        ]
-
-        if cfg.use_e5_prefix:
-            cmd.append("--use_e5_prefix")
-
-        if args.out_dir:
-            cmd += ["--out_dir", args.out_dir]
-        else:
-            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            out_dir = cfg.query_out_parent / f"q_{stamp}"
-            cmd += ["--out_dir", str(out_dir)]
-
-        subprocess.run(cmd, check=True)
         return 0
 
     if args.cmd in ("print-ps", "release"):
