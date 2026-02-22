@@ -1,1 +1,77 @@
-{"generated_utc":"2026-02-22T04:01:20Z","corpora":[{"corpus_id":"asc_A","title":"Anglo-Saxon Chronicle, MS A (canon)","canon_jsonl":{"path":"data_proc/asc_A_prod.jsonl","sha256":"2FD6B50693F88FB7563C4EC8240DBD327794A7F199103EA54FCBDBFEA7043EC4","records":346},"bm25":{"path":"indexes/bm25/asc_A_utf8.pkl","sha256":"9BC5C4233B2006B508425AF2AA7A68AB2A42135F37A5CD88CDB5B112FF6CEDDF"},"faiss":{"index_path":"indexes/vec_faiss/asc_A.index","index_sha256":"EA63F033BBCB44073FB7F9E1FCC808C4C931F76F95F2AA9BE92AA2D12D955003","ids_path":"indexes/vec_faiss/asc_A_ids.json","ids_sha256":"2FF8491D76FF4F8EDCD80EAF11EFFB5016258AA0FA583CE7A7BAA7FA4F54CA6D","meta_path":"indexes/vec_faiss/asc_A_meta.jsonl","meta_sha256":"3FD2B694AF3E996B884657E79C4661C9B78099B49775C28540BFBEC04650DA3D","model":null,"dim":null},"rights":{"tier":"B_LOCAL_ONLY","license":"UNVERIFIED","distributable":false}},{"corpus_id":"oe_bede","title":"Old English Bede (canon)","canon_jsonl":{"path":"data_proc/oe_bede_prod.jsonl","sha256":"B3E3684F548F0A6C1296DFA793F6B4364A0D641C5F7A2D1BA8D89455915DF79F","records":235},"bm25":{"path":"indexes/bm25/oe_bede_utf8.pkl","sha256":"8A1240B3D723FF0B03A81136D02F1D08B1599643A0BA913C7CCEED46DF718F9B"},"faiss":{"index_path":"indexes/vec_faiss/oe_bede.index","index_sha256":"743F682B0A2C09887097F94CD66EC901862B4E9FF73B93FB8D64EFE6FAF96F67","ids_path":"indexes/vec_faiss/oe_bede_ids.json","ids_sha256":"B5300DDCE5DBFECFCEED4B53CA67BF64B4AD2FBE5983563CEA6F3CE51F793065","meta_path":"indexes/vec_faiss/oe_bede_meta.jsonl","meta_sha256":"440DFBDCB484CA475FB6B2F2C5A90C8D893569796DB6C24FCCBE12D4AC6C1599","model":null,"dim":null},"rights":{"tier":"B_LOCAL_ONLY","license":"UNVERIFIED","distributable":false}},{"corpus_id":"oe_beowulf_9700","title":"Beowulf (Old English) [Project Gutenberg #9700 plain text UTF-8]","canon_jsonl":{"path":"data_proc/oe_beowulf_9700_prod.jsonl","sha256":"41E580BFBBCC59D94316C6E090613FC39127448BFD231A7666B9E6CBBB47F8A9","records":656},"bm25":{"path":"indexes/bm25/oe_beowulf_9700_utf8.pkl","sha256":"97C55F90ED033230661D7B3D0FD7889303CD953E643F4AD5D53442104CA20954"},"faiss":{"index_path":"indexes/vec_faiss/oe_beowulf_9700.index","index_sha256":"6BDC6ECF9C8DEC3E92E5C553EEBB7B4D40DF27179BE69AB2C517DDE3D2729D1F","ids_path":"indexes/vec_faiss/oe_beowulf_9700_ids.json","ids_sha256":"817EC06F99C7E2075354CC0E472AC1BC48B57A9A1A609A48B554BE61EC805E6F","meta_path":"indexes/vec_faiss/oe_beowulf_9700_meta.jsonl","meta_sha256":"D2E0614AD52ED226B3EBE7AE3356E7A93C1AAAE2094509AF16A4F520EAC6978C","model":null,"dim":null},"rights":{"tier":"A_PUBLIC","license":"PROJECT_GUTENBERG","distributable":true}}]}
+{
+    "generated_utc":  "2026-02-22T04:01:20Z",
+    "corpora":  [
+                    {
+                        "corpus_id":  "asc_A",
+                        "title":  "Anglo-Saxon Chronicle, MS A (canon)",
+                        "canon_jsonl":  {
+                                            "path":  "data_proc/asc_A_prod_v2.jsonl"
+                                        },
+                        "rights":  {
+                                       "tier":  "B_local_only",
+                                       "license":  "UNVERIFIED",
+                                       "distributable":  false
+                                   }
+                    },
+                    {
+                        "corpus_id":  "oe_bede",
+                        "title":  "Old English Bede (canon)",
+                        "canon_jsonl":  {
+                                            "path":  "data_proc/oe_bede_prod.jsonl"
+                                        },
+                        "rights":  {
+                                       "tier":  "B_local_only",
+                                       "license":  "UNVERIFIED",
+                                       "distributable":  false
+                                   }
+                    },
+                    {
+                        "corpus_id":  "oe_beowulf_9700",
+                        "title":  "Beowulf (Old English) [Project Gutenberg #9700]",
+                        "canon_jsonl":  {
+                                            "path":  "data_proc/oe_beowulf_9700_prod.jsonl"
+                                        },
+                        "rights":  {
+                                       "tier":  "A_open_terms",
+                                       "license":  "Project Gutenberg License",
+                                       "distributable":  true
+                                   }
+                    },
+                    {
+                        "corpus_id":  "echoe",
+                        "title":  "ECHOE (plaintext ingest)",
+                        "canon_jsonl":  {
+                                            "path":  "data_proc/echoe_prod.jsonl"
+                                        },
+                        "rights":  {
+                                       "tier":  "A_open_license",
+                                       "license":  "GPL-3.0",
+                                       "distributable":  true
+                                   }
+                    },
+                    {
+                        "corpus_id":  "echoe_tei",
+                        "title":  "ECHOE (TEI XML ingest)",
+                        "canon_jsonl":  {
+                                            "path":  "data_proc/echoe_tei_prod.jsonl"
+                                        },
+                        "rights":  {
+                                       "tier":  "A_open_license",
+                                       "license":  "GPL-3.0",
+                                       "distributable":  true
+                                   }
+                    },
+                    {
+                        "corpus_id":  "gutenberg_demo_oe",
+                        "title":  "Gutenberg demo OE (plaintext ingest)",
+                        "canon_jsonl":  {
+                                            "path":  "data_proc/gutenberg_demo_oe_prod.jsonl"
+                                        },
+                        "rights":  {
+                                       "tier":  "A_open_terms",
+                                       "license":  "Project Gutenberg License",
+                                       "distributable":  true
+                                   }
+                    }
+                ]
+}
