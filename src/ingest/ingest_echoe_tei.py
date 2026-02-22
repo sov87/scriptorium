@@ -6,10 +6,8 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Optional
 
-
-TEI_NS = {"tei": "http://www.tei-c.org/ns/1.0"}
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 
 
@@ -19,6 +17,17 @@ def sha256_file(p: Path) -> str:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def strip_ns(tag: str) -> str:
+    return tag.split("}", 1)[1] if tag.startswith("{") and "}" in tag else tag
+
+
+def detect_tei_ns(root_el: ET.Element) -> str | None:
+    # default namespace appears as {uri}TEI
+    if root_el.tag.startswith("{") and "}" in root_el.tag:
+        return root_el.tag.split("}", 1)[0][1:]
+    return None
 
 
 def norm_ws(s: str) -> str:
@@ -32,8 +41,8 @@ def extract_text_with_breaks(elem: ET.Element) -> str:
     parts: list[str] = []
 
     def walk(e: ET.Element) -> None:
-        tag = e.tag
-        if tag.endswith("lb") or tag.endswith("pb") or tag.endswith("cb"):
+        name = strip_ns(e.tag)
+        if name in ("lb", "pb", "cb"):
             parts.append("\n")
 
         if e.text:
@@ -46,6 +55,50 @@ def extract_text_with_breaks(elem: ET.Element) -> str:
 
     walk(elem)
     return norm_ws("".join(parts))
+
+
+def iter_by_localname(root: ET.Element, local: str) -> Iterable[ET.Element]:
+    for e in root.iter():
+        if strip_ns(e.tag) == local:
+            yield e
+
+
+def find_first_body(root_el: ET.Element, tei_ns: str | None) -> Optional[ET.Element]:
+    # Try namespaced path first if we have a namespace
+    if tei_ns:
+        ns = {"tei": tei_ns}
+        body = root_el.find(".//tei:text/tei:body", ns)
+        if body is not None:
+            return body
+        body = root_el.find(".//tei:body", ns)
+        if body is not None:
+            return body
+
+    # Fallback: no-namespace paths
+    body = root_el.find(".//text/body")
+    if body is not None:
+        return body
+    body = root_el.find(".//body")
+    if body is not None:
+        return body
+
+    # Last resort: any element with localname 'body'
+    for b in iter_by_localname(root_el, "body"):
+        return b
+    return None
+
+
+def pick_blocks(body: ET.Element) -> list[ET.Element]:
+    # Prefer common TEI block carriers in order
+    # (Many TEI corpora use <ab> or <l>/<lg> rather than <p>.)
+    blocks: list[ET.Element] = []
+    for name in ("p", "ab", "lg", "l", "head", "seg"):
+        blocks = [e for e in body.iter() if strip_ns(e.tag) == name]
+        if blocks:
+            return blocks
+
+    # If nothing matched, treat the whole body as one block
+    return [body]
 
 
 def main() -> int:
@@ -89,30 +142,29 @@ def main() -> int:
             except Exception:
                 continue
 
+            root_el = tree.getroot()
+            tei_ns = detect_tei_ns(root_el)
+
+            body = find_first_body(root_el, tei_ns)
+            if body is None:
+                continue
+
             doc = fp.stem
             file_sha = sha256_file(fp)
             src_rel = rel_to_root(fp)
 
-            root_el = tree.getroot()
             tei_id = root_el.get(f"{{{XML_NS}}}id")
 
-            body = root_el.find(".//tei:text/tei:body", TEI_NS)
-            if body is None:
-                continue
-
-            # Prefer direct <p> within body; if none, fall back to any nested <p>
-            ps = body.findall("./tei:p", TEI_NS)
-            if not ps:
-                ps = body.findall(".//tei:p", TEI_NS)
+            blocks = pick_blocks(body)
 
             idx = 0
-            for p in ps:
-                txt = extract_text_with_breaks(p)
+            for b in blocks:
+                txt = extract_text_with_breaks(b)
                 if not txt:
                     continue
                 idx += 1
 
-                p_xml_id = p.get(f"{{{XML_NS}}}id")
+                b_xml_id = b.get(f"{{{XML_NS}}}id")
                 rid = f"echoe_tei:{doc}:{idx:05d}"
                 if rid in seen:
                     raise SystemExit(f"duplicate id: {rid}")
@@ -124,7 +176,7 @@ def main() -> int:
                     "work_id": doc,
                     "witness_id": tei_id or doc,
                     "edition_id": "ECHOEProject/echoe:xml",
-                    "loc": f"{fp.relative_to(in_dir).as_posix()}#p{idx}",
+                    "loc": f"{fp.relative_to(in_dir).as_posix()}#b{idx}",
                     "lang": "ang",
                     "text": txt,
                     "text_norm": None,
@@ -133,7 +185,7 @@ def main() -> int:
                             "type": "file",
                             "path": src_rel,
                             "sha256": file_sha,
-                            "offset": {"p": idx, "xml_id": p_xml_id},
+                            "offset": {"block": idx, "xml_id": b_xml_id, "tag": strip_ns(b.tag)},
                         }
                     ],
                     "notes": [],
