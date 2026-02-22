@@ -9,7 +9,7 @@ This repo ships:
 - Tiny committed demo canon: `sample_data/data_proc/oe_bede_sample_utf8.jsonl`
 - Public registry pointing only at committed demo data: `docs/corpora.public.json`
 
-Because the default registry (`docs/corpora.json`) often points at local-only corpora under `data_proc/`, the demo and CI runs by temporarily swapping in the public registry.
+Because the default registry (`docs/corpora.json`) often points at local-only corpora under `data_proc/`, the demo and CI run by temporarily swapping in the public registry.
 
 ### Step 0 — Use the public registry (temporary swap)
 
@@ -33,12 +33,12 @@ python -m scriptorium answer-db --config configs\sample_demo_ci.toml --q "What i
 Provision the model once (creates `models/all-MiniLM-L6-v2/`):
 
 ```powershell
-python - << 'PY'
+@'
 from sentence_transformers import SentenceTransformer
 m = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 m.save("models/all-MiniLM-L6-v2")
 print("saved model -> models/all-MiniLM-L6-v2")
-PY
+'@ | python
 ```
 
 Run the same pipeline with strict doctor:
@@ -67,5 +67,3 @@ GitHub Actions uses the strict path:
 - runs strict doctor + build + smoke
 
 See `.github/workflows/ci.yml` for the exact sequence.
-
-*Project creation assited by LLM use*
