@@ -8,6 +8,15 @@ build/
 dist/
 .pytest_cache/
 .mypy_cache/
+db/
+tmp/
+data_raw/
+docs/source_fetch/
+__pycache__/
+*.pyc
+*.BAK*
+*.bak
+*.BAD_*.ps1
 
 # --- Virtual environments ---
 .venv/
