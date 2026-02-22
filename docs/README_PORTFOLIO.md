@@ -14,7 +14,7 @@ Core principles:
 - Derived SQLite DB with FTS5 full-text search (db-build, db-search)
 - Global vector index + hybrid retrieval (vec-build, retrieve)
 - LLM answering grounded in retrieved segments with strict JSON + segment-ID citations (answer-db, answer-batch-db)
-- Snapshot bundling with inclusion allowlist + rights gating (release --snapshot)
+- Snapshot bundling with rights gating (release --snapshot)
 
 ## Quick demo (Windows PowerShell)
 From project root:
@@ -22,6 +22,7 @@ From project root:
 ```powershell
 python -m scriptorium doctor --config configs\window_0597_0865.toml --strict --json
 .\src\demo_full_pipeline.ps1
+```
 
 ## Data layout
 - data_raw/ : local-only raw sources (never shipped)
@@ -32,5 +33,4 @@ python -m scriptorium doctor --config configs\window_0597_0865.toml --strict --j
 - releases/ : snapshot zip outputs
 
 ## Rights model
-Each corpus in docs/corpora.json has rights.distributable.
-Snapshots include canon JSONL only when distributable=true.
+Each corpus in docs/corpora.json has rights.distributable. Snapshots include canon JSONL only when distributable=true.
