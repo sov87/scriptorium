@@ -39,9 +39,9 @@ data_raw/
 data_gen/
 models/
 
-# Indexes (derived, rebuildable)
+# Derived DB / indexes (rebuildable)
+db/
 indexes/
-# If you ever want to track small example indexes, delete this and add allowlist rules.
 
 # Runtime outputs (derived)
 runs/
@@ -57,6 +57,11 @@ docs/corpus_queue.json
 # Backups / patch artifacts
 *.bak
 *.bak.*
+*.bak_*
+*.BAK
+*.BAK*
+*.BAD
+*.BAD*
 *.corrupt_*
 
 # Archives / large local artifacts
@@ -67,8 +72,9 @@ docs/corpus_queue.json
 # -------------------------
 # Config handling
 # -------------------------
-# Keep normal configs tracked for reproducibility.
-# Ignore only explicitly-local/private overrides.
+# Keep only example configs in git; keep real machine configs local.
+configs/window_*.toml
+!configs/window_*.example.toml
 configs/*local*.toml
 configs/*private*.toml
 configs/*secret*.toml
