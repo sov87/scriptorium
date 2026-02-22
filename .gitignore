@@ -1,73 +1,82 @@
-# --- Python ---
+# -------------------------
+# SCRIPTORIUM .gitignore
+# -------------------------
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python caches / build artifacts
 __pycache__/
 *.py[cod]
 *.pyd
 *.so
-*.egg-info/
-build/
-dist/
 .pytest_cache/
 .mypy_cache/
-db/
-tmp/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+*.egg-info/
+src/scriptorium.egg-info/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+
+# -------------------------
+# Local-first corpora + models (NEVER COMMIT)
+# -------------------------
+data_proc/
 data_raw/
-docs/source_fetch/
-__pycache__/
-*.pyc
-*.BAK*
-*.bak
-*.BAD_*.ps1
-
-# --- Virtual environments ---
-.venv/
-venv/
-.env/
-
-# --- Project runtime artifacts (never commit) ---
-runs/
-releases/
-reports/
 data_gen/
-indexes/
 models/
 
-# Canonical corpora (private / large) — keep out of public repo
-data_proc/
+# Indexes (derived, rebuildable)
+indexes/
+# If you ever want to track small example indexes, delete this and add allowlist rules.
 
-# Allow the small public sample corpus
-!sample_data/
-!sample_data/**
-
-# Sample outputs (generated locally)
-sample_data/indexes/
-sample_data/runs/
-sample_data/reports/
-sample_data/releases/
-
-# Local machine-specific configs
-configs/window_*.toml
-configs/*_local*.toml
-configs/*private*.toml
-!configs/TEMPLATE.example.toml
-
-# Archives
-*.zip
-*.sha256.txt
-
-# --- Local workspace / scratch ---
+# Runtime outputs (derived)
+runs/
+reports/
+releases/
 scratch/
-data_raw/
+tmp/
 
-# Backup / temp files
+# Local fetch artifacts / queues
+docs/source_fetch/
+docs/corpus_queue.json
+
+# Backups / patch artifacts
 *.bak
-*.bak_*
+*.bak.*
 *.corrupt_*
-*.tmp
+
+# Archives / large local artifacts
+*.zip
+*.7z
+*.rar
+
+# -------------------------
+# Config handling
+# -------------------------
+# Keep normal configs tracked for reproducibility.
+# Ignore only explicitly-local/private overrides.
+configs/*local*.toml
+configs/*private*.toml
+configs/*secret*.toml
+configs/secrets*.toml
+configs/private/
+
+# -------------------------
+# Optional: logs
+# -------------------------
 *.log
-
-# Sample data backups created during setup
-sample_data/data_proc/*.bak
-sample_data/data_proc/*.bad.bak
-
-# Local tools / experiments (keep local unless you explicitly want them public)
-src/ai_pilot_generate.py
+logs/
