@@ -88,6 +88,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_v.add_argument("--dir", required=True, help="Run folder path (answer run or batch run).")
     p_v.add_argument("--strict", action="store_true", help="Treat warnings as failures.")
     p_v.add_argument("--json", action="store_true", help="Print JSON report.")
+    
+    p_ic = sub.add_parser("init-corpus", help="Create skeleton files for a new corpus_id and register it.")
+    p_ic.add_argument("--config", required=True)
+    p_ic.add_argument("--id", required=True, dest="corpus_id")
+    p_ic.add_argument("--title", required=True)
 
     return p
 
@@ -95,6 +100,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cfg = load_config(args.config)
+    
+    if args.cmd == "init-corpus":
+        from .init_corpus import init_corpus
+        paths = init_corpus(cfg.project_root, corpus_id=args.corpus_id, title=args.title)
+        print(str(paths.provenance))
+        print(str(paths.sources))
+        print(str(paths.ingest_stub))
+        return 0
 
     if args.cmd == "validate-run":
         from pathlib import Path as _Path
