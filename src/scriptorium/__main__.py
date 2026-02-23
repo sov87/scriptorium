@@ -56,6 +56,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_paths = sub.add_parser("paths")
     p_paths.add_argument("--config", required=True)
 
+    # check-ai-fts (AI FTS health)
+    p_caf = sub.add_parser("check-ai-fts")
+    p_caf.add_argument("--config", required=True)
+    p_caf.add_argument("--strict", action="store_true")
+    p_caf.add_argument("--json", action="store_true")
+
     # db-build / db-search
     p_db = sub.add_parser("db-build")
     p_db.add_argument("--config", required=True)
@@ -194,6 +200,60 @@ def main(argv: list[str] | None = None) -> int:
         print(f"tag: {cfg.tag}")
         print(f"release_ps1: {cfg.release_ps1}")
         return 0
+
+
+    if args.cmd == "check-ai-fts":
+        import sqlite3
+
+        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
+
+        def _table_exists(con, name: str) -> bool:
+            return con.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                (name,),
+            ).fetchone() is not None
+
+        warnings: list[str] = []
+        info: dict[str, int] = {}
+
+        con = sqlite3.connect(str(db_path))
+        try:
+            # answers
+            answers = con.execute("SELECT count(*) FROM answers").fetchone()[0] if _table_exists(con, "answers") else 0
+            answers_fts = con.execute("SELECT count(*) FROM answers_fts").fetchone()[0] if _table_exists(con, "answers_fts") else 0
+            info["answers"] = int(answers)
+            info["answers_fts"] = int(answers_fts)
+
+            if answers > 0 and answers_fts == 0:
+                warnings.append("answers_fts is empty but answers has rows (FTS not populated).")
+            elif answers > 0 and answers_fts > 0 and answers_fts != answers:
+                warnings.append(f"answers_fts rowcount mismatch (answers={answers}, answers_fts={answers_fts}).")
+
+            # glosses
+            glosses = con.execute("SELECT count(*) FROM glosses").fetchone()[0] if _table_exists(con, "glosses") else 0
+            glosses_fts = con.execute("SELECT count(*) FROM glosses_fts").fetchone()[0] if _table_exists(con, "glosses_fts") else 0
+            info["glosses"] = int(glosses)
+            info["glosses_fts"] = int(glosses_fts)
+
+            if glosses > 0 and glosses_fts == 0:
+                warnings.append("glosses_fts is empty but glosses has rows (FTS not populated).")
+            elif glosses > 0 and glosses_fts > 0 and glosses_fts != glosses:
+                warnings.append(f"glosses_fts rowcount mismatch (glosses={glosses}, glosses_fts={glosses_fts}).")
+        finally:
+            con.close()
+
+        ok = len(warnings) == 0
+        if args.json:
+            print(_json_min({"ok": ok, "warnings": warnings, "db": str(db_path), "counts": info}))
+        else:
+            print(f"[OK] check-ai-fts db={db_path}")
+            for k, v in info.items():
+                print(f"  {k}: {v}")
+            if warnings:
+                print("[WARN] " + " | ".join(warnings))
+            else:
+                print("[OK] no warnings")
+        return 1 if (args.strict and warnings) else 0
 
     if args.cmd == "db-build":
         script = cfg.project_root / "src" / "build_sqlite_db.py"
@@ -409,10 +469,38 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "answer-import-db":
         from .ai_layers_db import import_answer_run
+        import sqlite3
+
         db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         run_dir = Path(args.run_dir)
         run_dir = run_dir if run_dir.is_absolute() else (cfg.project_root / run_dir).resolve()
         res = import_answer_run(db_path, run_dir)
+
+        # Hardening: ensure answers_fts stays consistent for this run_id
+        run_id = str(res.get("run_id", "")).strip()
+        if run_id:
+            con = sqlite3.connect(str(db_path))
+            try:
+                # Only act if answers_fts exists (schema is expected to create it)
+                exists = con.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='answers_fts'"
+                ).fetchone() is not None
+                if exists:
+                    row = con.execute(
+                        "SELECT query, answer FROM answers WHERE run_id=?",
+                        (run_id,),
+                    ).fetchone()
+                    if row is not None:
+                        q, a = row[0], row[1]
+                        con.execute("DELETE FROM answers_fts WHERE run_id=?", (run_id,))
+                        con.execute(
+                            "INSERT INTO answers_fts(run_id, query, answer) VALUES (?,?,?)",
+                            (run_id, q, a),
+                        )
+                        con.commit()
+            finally:
+                con.close()
+
         print(_json_min(res))
         return 0
 
