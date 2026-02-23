@@ -515,3 +515,136 @@ def answer_search(db_path: Path, q: str, k: int = 10, corpus: str = "", show_cit
         return out
     finally:
         con.close()
+
+def answer_show(db_path: Path, run_id: str, max_cites: int = 8, chars: int = 400) -> dict[str, Any]:
+    """Load a stored answer run and (best-effort) resolve cited passages from segments.
+
+    Audit convenience: run_id -> answer + cited corpus_id:segment_id -> excerpted segments.
+    """
+    con = sqlite3.connect(str(db_path))
+    try:
+        ensure_ai_tables(con)
+
+        row = con.execute(
+            "select run_id, query, corpus_filter, answer, citations_json, retrieval_json from answers where run_id=?",
+            (run_id,),
+        ).fetchone()
+        if row is None:
+            raise SystemExit(f"run_id not found: {run_id}")
+
+        _, query, corpus_filter, answer, citations_json, retrieval_json = row
+        query_s = query if isinstance(query, str) else ""
+        answer_s = answer if isinstance(answer, str) else ""
+        cites = _extract_cites(citations_json or "", retrieval_json or "", max_items=int(max_cites))
+
+        seg_cols = [r[1] for r in con.execute("pragma table_info(segments)").fetchall()]
+        text_col = next((c for c in ("text", "seg_text", "content", "segment_text") if c in seg_cols), "")
+        work_col = next((c for c in ("work_id", "work", "workid") if c in seg_cols), "")
+        loc_col = next((c for c in ("loc", "location") if c in seg_cols), "")
+
+        select_cols = ["corpus_id", "id"]
+        if work_col:
+            select_cols.append(work_col)
+        if loc_col:
+            select_cols.append(loc_col)
+        if text_col:
+            select_cols.append(text_col)
+
+        sel_sql = "select " + ", ".join(select_cols) + " from segments where corpus_id=? and id=?"
+        sel_sql_any = "select " + ", ".join(select_cols) + " from segments where id=?"
+
+        resolved: list[dict[str, Any]] = []
+        missing: list[str] = []
+
+        def _candidates(corpus: str, seg_id: str, full_key: str) -> list[str]:
+            cands: list[str] = []
+            seg_id = seg_id.strip()
+            corpus = corpus.strip()
+            full_key = full_key.strip()
+
+            # try raw seg id
+            if seg_id:
+                cands.append(seg_id)
+
+                # try stripping leading zeros (common mismatch)
+                nz = seg_id.lstrip("0")
+                if nz and nz != seg_id:
+                    cands.append(nz)
+
+            # try full key as an id
+            if full_key:
+                cands.append(full_key)
+
+            # try explicit corpus-prefixed id (if segments.id stores corpus:seg)
+            if corpus and seg_id:
+                cands.append(f"{corpus}:{seg_id}")
+            if corpus and seg_id:
+                nz = seg_id.lstrip("0")
+                if nz and nz != seg_id:
+                    cands.append(f"{corpus}:{nz}")
+
+            # de-dup preserving order
+            seen: set[str] = set()
+            out: list[str] = []
+            for x in cands:
+                x = x.strip()
+                if not x or x in seen:
+                    continue
+                seen.add(x)
+                out.append(x)
+            return out
+
+        for key in cites:
+            if ":" not in key:
+                missing.append(key)
+                continue
+            corpus, seg_id = key.split(":", 1)
+
+            seg = None
+            for cand in _candidates(corpus, seg_id, key):
+                seg = con.execute(sel_sql, (corpus, cand)).fetchone()
+                if seg is not None:
+                    break
+
+            # last resort: id-only lookup (useful when corpus_id differs but id is globally unique)
+            if seg is None:
+                for cand in _candidates(corpus, seg_id, key):
+                    seg = con.execute(sel_sql_any, (cand,)).fetchone()
+                    if seg is not None:
+                        break
+
+            if seg is None:
+                missing.append(key)
+                continue
+
+            # Normalize segment_id so printing corpus:segment_id doesn't double-prefix
+            sid = seg[1]
+            if isinstance(sid, str):
+                pref = str(seg[0]) + ":"
+                if sid.startswith(pref):
+                    sid = sid.split(":", 1)[1]
+
+            d: dict[str, Any] = {"corpus_id": seg[0], "segment_id": sid}
+            idx = 2
+            if work_col:
+                d["work_id"] = seg[idx]
+                idx += 1
+            if loc_col:
+                d["loc"] = seg[idx]
+                idx += 1
+            if text_col:
+                t = seg[idx] if isinstance(seg[idx], str) else ""
+                d["text_snip"] = t[: int(chars)]
+            resolved.append(d)
+
+        return {
+            "run_id": run_id,
+            "corpus_filter": corpus_filter or "",
+            "query": query_s,
+            "answer": answer_s,
+            "cites": cites,
+            "resolved": resolved,
+            "missing": missing,
+        }
+    finally:
+        con.close()

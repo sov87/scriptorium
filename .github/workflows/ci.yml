@@ -43,14 +43,29 @@ jobs:
           python -m scriptorium retrieve --config configs/sample_demo_ci_strict.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample
           python -m scriptorium answer-db --config configs/sample_demo_ci_strict.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample --dry-run
 
-          # Seed a minimal answer run (no LLM) and exercise import + FTS + answer-search
+
+          # Seed a minimal answer run (no LLM) and exercise import + FTS + answer-search + answer-show
           python - << 'PY'
           from pathlib import Path
           import json
+          import sqlite3
+          from scriptorium.config import load_config
+
+          cfg = load_config("configs/sample_demo_ci_strict.toml")
+          db = cfg.db_path
+          con = sqlite3.connect(str(db))
+          try:
+              seg = con.execute("select id from segments where corpus_id=? limit 1", ("oe_bede_sample",)).fetchone()
+          finally:
+              con.close()
+          if not seg:
+              raise SystemExit('CI seed failed: no segments for oe_bede_sample')
+          seg_id = seg[0]
+
           run = Path("runs/answer_db/20000101_000000_ci_seed_king")
           run.mkdir(parents=True, exist_ok=True)
           (run / "meta.json").write_text(json.dumps({"run_id": run.name, "corpus_filter": "oe_bede_sample"}, separators=(",", ":")), encoding="utf-8")
-          (run / "retrieval.json").write_text(json.dumps({"query": "king", "corpus": "oe_bede_sample"}, separators=(",", ":")), encoding="utf-8")
+          (run / "retrieval.json").write_text(json.dumps({"query": "king", "corpus": "oe_bede_sample", "hits": [{"corpus_id": "oe_bede_sample", "segment_id": seg_id}]}, separators=(",", ":")), encoding="utf-8")
           (run / "answer.json").write_text(json.dumps({"answer": "CI seeded answer containing king.", "citations": [], "notes": []}, separators=(",", ":")), encoding="utf-8")
           (run / "validation.json").write_text("{}", encoding="utf-8")
           print(run)
@@ -59,18 +74,22 @@ jobs:
           python -m scriptorium answer-import-db --config configs/sample_demo_ci_strict.toml --run-dir runs/answer_db/20000101_000000_ci_seed_king
           python -m scriptorium check-ai-fts --config configs/sample_demo_ci_strict.toml --json
 
-          # Assert answer-search finds the seeded row (prefix query) using cfg.db_path
+          # Assert: answer-search finds cites and answer-show resolves at least 1 segment
           python - << 'PY'
           from scriptorium.config import load_config
-          from scriptorium.ai_layers_db import answer_search
+          from scriptorium.ai_layers_db import answer_search, answer_show
 
           cfg = load_config("configs/sample_demo_ci_strict.toml")
           db = cfg.db_path
-
-          hits = answer_search(db, q="king*", k=5, corpus="oe_bede_sample")
+          hits = answer_search(db, q='king*', k=5, corpus='oe_bede_sample', show_cites=True)
           if not hits:
-              raise SystemExit("CI assert failed: answer-search returned 0 hits for king* in oe_bede_sample")
-          print(f"CI assert ok: {len(hits)} hit(s)")
+              raise SystemExit('CI assert failed: answer-search returned 0 hits')
+          if not hits[0].get('cites'):
+              raise SystemExit('CI assert failed: answer-search returned hit but no cites')
+          run_id = hits[0].get('run_id','')
+          res = answer_show(db, run_id=run_id, max_cites=1, chars=80)
+          if not res.get('resolved'):
+              raise SystemExit('CI assert failed: answer-show did not resolve any cited segment')
+          print('CI assert ok')
           PY
-
 

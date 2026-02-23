@@ -172,6 +172,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_as.add_argument("--corpus", default="")
     p_as.add_argument("--show-cites", action="store_true")
 
+    p_ashow = sub.add_parser("answer-show")
+    p_ashow.add_argument("--config", required=True)
+    p_ashow.add_argument("--run-id", required=True)
+    p_ashow.add_argument("--max-cites", type=int, default=8)
+    p_ashow.add_argument("--chars", type=int, default=400)
+    p_ashow.add_argument("--json", action="store_true")
+
     # catalog
     p_cs = sub.add_parser("catalog-status")
     p_cs.add_argument("--config", required=True)
@@ -527,6 +534,45 @@ def main(argv: list[str] | None = None) -> int:
                 cites = r.get("cites")
                 if isinstance(cites, list) and cites:
                     print("  cites: " + ", ".join(str(x) for x in cites))
+        return 0
+
+
+    if args.cmd == "answer-show":
+        from .ai_layers_db import answer_show
+        res = answer_show(
+            db_path,
+            run_id=str(getattr(args, "run_id", "")),
+            max_cites=int(getattr(args, "max_cites", 8)),
+            chars=int(getattr(args, "chars", 400)),
+        )
+        if bool(getattr(args, "json", False)):
+            print(_json_min(res))
+            return 0
+
+        print(f"[OK] run_id={res.get('run_id','')} corpus={res.get('corpus_filter','')}")
+        print(f"  q: {res.get('query','')}")
+        print(f"  a: {res.get('answer','')}")
+
+        cites = res.get("cites") if isinstance(res.get("cites"), list) else []
+        if cites:
+            print("  cites: " + ", ".join(str(x) for x in cites))
+
+        resolved = res.get("resolved") if isinstance(res.get("resolved"), list) else []
+        for p in resolved:
+            if not isinstance(p, dict):
+                continue
+            head = f"  - {p.get('corpus_id','')}:{p.get('segment_id','')}"
+            if p.get("work_id"):
+                head += f" {p.get('work_id')}"
+            if p.get("loc"):
+                head += f" {p.get('loc')}"
+            print(head)
+            if p.get("text_snip"):
+                print("    " + str(p.get("text_snip")))
+
+        missing = res.get("missing") if isinstance(res.get("missing"), list) else []
+        if missing:
+            print("  missing: " + ", ".join(str(x) for x in missing))
         return 0
 
     if args.cmd == "catalog-status":
