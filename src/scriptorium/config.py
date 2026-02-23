@@ -8,6 +8,7 @@ import tomllib
 @dataclass(frozen=True)
 class Config:
     project_root: Path
+    db_path: Path
     window: str
     tag: str
     release_ps1: Path
@@ -76,6 +77,9 @@ def load_config(path: str | Path) -> Config:
     release_ps1 = _get(raw, r"src\release_window.ps1", "ps", "release_window_ps1")
     release_ps1 = _resolve_under(project_root, release_ps1)
 
+    db_path_rel = _get(raw, "db/scriptorium.sqlite", "root", "db_path")
+    db_path = _resolve_under(project_root, db_path_rel)
+
     bm25_rel = _get(raw, r"indexes\bm25\oe_bede_prod_utf8.pkl", "indexes", "bm25")
     vec_dir_rel = _get(raw, r"indexes\vec_faiss", "indexes", "vec_dir")
 
@@ -100,6 +104,7 @@ def load_config(path: str | Path) -> Config:
 
     return Config(
         project_root=project_root,
+        db_path=db_path,
         window=window,
         tag=tag,
         release_ps1=release_ps1,

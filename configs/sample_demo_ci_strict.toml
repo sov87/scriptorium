@@ -1,5 +1,6 @@
 [root]
 project_root = ".."
+db_path = "db/scriptorium_ci.sqlite"
 
 [window]
 name = "SAMPLE_CI_STRICT"

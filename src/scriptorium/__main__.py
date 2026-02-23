@@ -170,6 +170,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_as.add_argument("--q", required=True)
     p_as.add_argument("--k", type=int, default=10)
     p_as.add_argument("--corpus", default="")
+    p_as.add_argument("--show-cites", action="store_true")
 
     # catalog
     p_cs = sub.add_parser("catalog-status")
@@ -189,6 +190,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     cfg = load_config(args.config)
+    default_db_path = cfg.project_root / "db" / "scriptorium.sqlite"
+    db_path = getattr(cfg, "db_path", default_db_path)
+    db_path = db_path.resolve() if hasattr(db_path, "resolve") else default_db_path
 
     if args.cmd == "doctor":
         from .doctor import run_doctor
@@ -204,9 +208,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "check-ai-fts":
         import sqlite3
-
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
-
         def _table_exists(con, name: str) -> bool:
             return con.execute(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
@@ -257,7 +258,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "db-build":
         script = cfg.project_root / "src" / "build_sqlite_db.py"
-        cmd = [sys.executable, str(script), "--root", str(cfg.project_root), "--out", args.out]
+        out_arg = args.out
+        if out_arg == "db/scriptorium.sqlite":
+            out_arg = str(db_path)
+        cmd = [sys.executable, str(script), "--root", str(cfg.project_root), "--out", str(out_arg)]
         if args.overwrite:
             cmd.append("--overwrite")
         subprocess.run(cmd, check=True)
@@ -265,11 +269,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "db-search":
         from .db_search_fts import run_db_search
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         return run_db_search(db_path, q=args.q, k=args.k, corpus=args.corpus)
 
     if args.cmd == "vec-build":
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         out_dir = (cfg.project_root / args.out_dir).resolve()
         model = getattr(cfg, "embed_model", None)
         if model is None:
@@ -293,7 +295,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "retrieve":
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         vec_dir = (cfg.project_root / "indexes" / "vec_faiss_global").resolve()
         model = getattr(cfg, "embed_model", None)
         if model is None:
@@ -330,7 +331,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "answer-db":
         from .answer_db import AnswerDbArgs, run_answer_db
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         vec_dir = (cfg.project_root / "indexes" / "vec_faiss_global").resolve()
         embed_model = getattr(cfg, "embed_model", None)
         if embed_model is None:
@@ -363,7 +363,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "answer-batch-db":
         from .answer_batch_db import BatchArgs, run_answer_batch_db
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         vec_dir = (cfg.project_root / "indexes" / "vec_faiss_global").resolve()
         embed_model = getattr(cfg, "embed_model", None)
         if embed_model is None:
@@ -400,8 +399,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "gloss-db":
         from .gloss_db import GlossDbArgs, run_gloss_db
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
-
         llm_base = args.llm_base_url.strip() if args.llm_base_url else os.getenv("SCRIPTORIUM_LLM_BASE_URL", "http://localhost:1234/v1")
         llm_model = args.llm_model.strip() if args.llm_model else os.getenv("SCRIPTORIUM_LLM_MODEL", "")
         llm_key = os.getenv("SCRIPTORIUM_LLM_API_KEY", "lm-studio")
@@ -430,8 +427,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "gloss-batch-db":
         from .gloss_batch_db import BatchArgs, run_gloss_batch_db
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
-
         llm_base = args.llm_base_url.strip() if args.llm_base_url else os.getenv("SCRIPTORIUM_LLM_BASE_URL", "http://localhost:1234/v1")
         llm_model = args.llm_model.strip() if args.llm_model else os.getenv("SCRIPTORIUM_LLM_MODEL", "")
         llm_key = os.getenv("SCRIPTORIUM_LLM_API_KEY", "lm-studio")
@@ -460,7 +455,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "gloss-import-db":
         from .ai_layers_db import import_gloss_run
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         run_dir = Path(args.run_dir)
         run_dir = run_dir if run_dir.is_absolute() else (cfg.project_root / run_dir).resolve()
         res = import_gloss_run(db_path, run_dir)
@@ -470,8 +464,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "answer-import-db":
         from .ai_layers_db import import_answer_run
         import sqlite3
-
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         run_dir = Path(args.run_dir)
         run_dir = run_dir if run_dir.is_absolute() else (cfg.project_root / run_dir).resolve()
         res = import_answer_run(db_path, run_dir)
@@ -506,7 +498,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "gloss-search":
         from .ai_layers_db import gloss_search
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         rows = gloss_search(db_path, q=args.q, k=int(args.k), corpus=str(args.corpus))
         if not rows:
             print(f"[OK] 0 hits (q={args.q!r}, corpus={args.corpus!r})")
@@ -521,8 +512,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "answer-search":
         from .ai_layers_db import answer_search
-        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
-        rows = answer_search(db_path, q=args.q, k=int(args.k), corpus=str(args.corpus))
+        rows = answer_search(db_path, q=args.q, k=int(args.k), corpus=str(args.corpus), show_cites=bool(getattr(args, "show_cites", False)))
         if not rows:
             print(f"[OK] 0 hits (q={args.q!r}, corpus={args.corpus!r})")
             return 0
@@ -533,6 +523,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{r.get('run_id','')}\t{r.get('corpus_filter','')}\t{score_s}")
             print(f"  q: {r.get('query_snip','')}")
             print(f"  a: {r.get('answer_snip','')}")
+            if getattr(args, "show_cites", False):
+                cites = r.get("cites")
+                if isinstance(cites, list) and cites:
+                    print("  cites: " + ", ".join(str(x) for x in cites))
         return 0
 
     if args.cmd == "catalog-status":
