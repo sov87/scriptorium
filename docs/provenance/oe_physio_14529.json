@@ -1,0 +1,34 @@
+{
+  "schema": "scriptorium.provenance.v1",
+  "generated_utc": "2026-02-22T23:21:47Z",
+  "corpus_id": "oe_physio_14529",
+  "title": "The Old English Physiologus (PG #14529)",
+  "rights": {
+    "tier": "UNSET",
+    "license": "",
+    "distributable": false
+  },
+  "sources": [],
+  "processing": [],
+  "outputs": {
+    "canon_jsonl": {
+      "path": "data_proc/oe_physio_14529_prod.jsonl",
+      "sha256": ""
+    },
+    "bm25": {
+      "path": "",
+      "sha256": ""
+    },
+    "faiss": {
+      "index_path": "",
+      "ids_path": "",
+      "meta_path": "",
+      "sha256": {
+        "index": "",
+        "ids": "",
+        "meta": ""
+      }
+    }
+  },
+  "notes": []
+}
