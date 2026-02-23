@@ -2,6 +2,10 @@
 
 Local-first, audit-friendly pipeline for building a structured database of Old English / Anglo-Saxon texts.
 
+## LLM use disclosure
+
+This project was developed with assistance from large language models (LLMs) used as a coding copilot and for drafting certain documentation and utilities. The repository also includes optional LLM-powered features (e.g., `answer-db` / AI answer generation) that are designed to be audit-traceable via saved prompts, raw model responses, and retrieval/citation JSON. Any LLM-generated outputs should be treated as machine-generated and verified as appropriate for your use case.
+
 ## Reproducible demo (works from a clean checkout)
 
 This repo ships:
