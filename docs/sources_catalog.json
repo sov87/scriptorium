@@ -1,6 +1,6 @@
 {
   "schema": "scriptorium.sources_catalog.v1",
-  "generated_utc": "",
+  "generated_utc": "2026-02-23T05:20:39Z",
   "sources": [
     {
       "source_id": "asc_A_manual",
@@ -11,7 +11,8 @@
       "ref": "",
       "license": "UNVERIFIED",
       "distributable": false,
-      "notes": "Local-only until rights are verified."
+      "notes": "Local-only until rights are verified.",
+      "title": "Anglo-Saxon Chronicle, MS A (manual source placeholder)"
     },
     {
       "source_id": "beowulf_9700_manual",
@@ -22,7 +23,8 @@
       "ref": "",
       "license": "Project Gutenberg License",
       "distributable": true,
-      "notes": "You already ingested; keep manual unless you want automated download later."
+      "notes": "You already ingested; keep manual unless you want automated download later.",
+      "title": "Beowulf (manual source placeholder)"
     },
     {
       "source_id": "echoe_repo",
@@ -32,7 +34,8 @@
       "ref": "",
       "license": "GPL-3.0",
       "distributable": true,
-      "notes": "ECHOEProject/echoe (GPL-3.0): plaintext + TEI XML corpora."
+      "notes": "ECHOEProject/echoe (GPL-3.0): plaintext + TEI XML corpora.",
+      "title": "ECHOE Project repository (plaintext + TEI)"
     },
     {
       "source_id": "gutenberg_demo_oe",
@@ -42,7 +45,8 @@
       "ref": "",
       "license": "Project Gutenberg License",
       "distributable": true,
-      "notes": "Automated HTTP download for demo corpus"
+      "notes": "Automated HTTP download for demo corpus",
+      "title": "Project Gutenberg Old English demo (HTTP)"
     },
     {
       "source_id": "oe_bede_manual",
@@ -53,7 +57,8 @@
       "ref": "",
       "license": "UNVERIFIED",
       "distributable": false,
-      "notes": "Local-only until rights are verified."
+      "notes": "Local-only until rights are verified.",
+      "title": "Old English Bede (manual source placeholder)"
     },
     {
       "source_id": "pg_14529_physio",
@@ -63,7 +68,8 @@
       "ref": "",
       "license": "Project Gutenberg License",
       "distributable": true,
-      "notes": "The Old English Physiologus (PG #14529) plain text UTF-8"
+      "notes": "The Old English Physiologus (PG #14529) plain text UTF-8",
+      "title": "Physiologus (Old English), Project Gutenberg #14529"
     },
     {
       "source_id": "pg_45861_aelfric_grammar",
@@ -73,7 +79,8 @@
       "ref": "",
       "license": "Project Gutenberg License",
       "distributable": true,
-      "notes": "PG #45861: Ælfrics Grammatik und Glossar (German + Old English; Plain Text UTF-8)"
+      "notes": "PG #45861: Ælfrics Grammatik und Glossar (German + Old English; Plain Text UTF-8)",
+      "title": "Ælfric’s Grammar and Glossary, Project Gutenberg #45861"
     },
     {
       "source_id": "pg_9701_beowulf",
@@ -83,7 +90,8 @@
       "ref": "",
       "license": "Project Gutenberg License",
       "distributable": true,
-      "notes": "PG #9701: Beowulf + Finnsburh fragment (Plain Text UTF-8)"
+      "notes": "PG #9701: Beowulf + Finnsburh fragment (Plain Text UTF-8)",
+      "title": "Beowulf (Project Gutenberg #9701, plain text UTF-8)"
     }
   ],
   "ingests": [
