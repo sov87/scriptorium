@@ -32,7 +32,7 @@
       "ref": "",
       "license": "GPL-3.0",
       "distributable": true,
-      "notes": "Shared source for echoe plaintext + TEI ingests."
+      "notes": "ECHOEProject/echoe (GPL-3.0): plaintext + TEI XML corpora."
     },
     {
       "source_id": "gutenberg_demo_oe",

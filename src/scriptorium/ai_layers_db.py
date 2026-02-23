@@ -332,3 +332,55 @@ def gloss_search(db_path: Path, q: str, k: int = 10, corpus: str = "") -> list[d
         return out
     finally:
         con.close()
+def answer_search(db_path: Path, q: str, k: int = 10, corpus: str = "") -> list[dict[str, Any]]:
+    """Search imported answers via FTS.
+
+    v1 scope: return run-level hits (no segment_id extraction). Corpus filtering is applied
+    by joining to the real `answers` table and filtering on `answers.corpus_filter`.
+    """
+    con = sqlite3.connect(str(db_path))
+    try:
+        ensure_ai_tables(con)
+
+        # NOTE: FTS5 requires the real table name on the left side of MATCH (aliases are unreliable).
+        where = "answers_fts match ?"
+        params: list[Any] = [q]
+        if corpus:
+            where += " and a.corpus_filter=?"
+            params.append(corpus)
+
+        rows = con.execute(
+            f"""
+            select
+              a.run_id,
+              a.query,
+              a.corpus_filter,
+              a.answer,
+              bm25(answers_fts) as score
+            from answers_fts
+            join answers a on a.run_id=answers_fts.run_id
+            where {where}
+            order by score
+            limit ?
+            """,
+            (*params, int(k)),
+        ).fetchall()
+
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            run_id, query, corpus_filter, answer, score = r
+            query_s = query if isinstance(query, str) else ""
+            answer_s = answer if isinstance(answer, str) else ""
+            out.append(
+                {
+                    "run_id": run_id,
+                    "corpus_filter": corpus_filter or "",
+                    "query": query_s,
+                    "query_snip": query_s[:120],
+                    "answer_snip": answer_s[:300],
+                    "score": float(score) if score is not None else None,
+                }
+            )
+        return out
+    finally:
+        con.close()

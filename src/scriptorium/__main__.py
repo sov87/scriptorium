@@ -7,6 +7,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from .config import load_config
 from .ps_bridge import format_release_window_cmd, run_release_window
@@ -14,6 +15,11 @@ from .ps_bridge import format_release_window_cmd, run_release_window
 
 def _utc_stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+
+def _json_min(obj: Any) -> str:
+    import json
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -138,6 +144,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_gbd.add_argument("--max-tokens", type=int, default=600)
     p_gbd.add_argument("--temperature", type=float, default=0.2)
 
+    # AI layer import/search
+    p_gi = sub.add_parser("gloss-import-db")
+    p_gi.add_argument("--config", required=True)
+    p_gi.add_argument("--run-dir", required=True, help="gloss-db run dir containing gloss.jsonl + meta.json")
+
+    p_ai = sub.add_parser("answer-import-db")
+    p_ai.add_argument("--config", required=True)
+    p_ai.add_argument("--run-dir", required=True, help="answer-db run dir containing answer.json + meta.json")
+
+    p_gs = sub.add_parser("gloss-search")
+    p_gs.add_argument("--config", required=True)
+    p_gs.add_argument("--q", required=True)
+    p_gs.add_argument("--k", type=int, default=10)
+    p_gs.add_argument("--corpus", default="")
+
+    p_as = sub.add_parser("answer-search")
+    p_as.add_argument("--config", required=True)
+    p_as.add_argument("--q", required=True)
+    p_as.add_argument("--k", type=int, default=10)
+    p_as.add_argument("--corpus", default="")
+
     # catalog
     p_cs = sub.add_parser("catalog-status")
     p_cs.add_argument("--config", required=True)
@@ -159,7 +186,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "doctor":
         from .doctor import run_doctor
-
         return run_doctor(cfg, strict=args.strict, as_json_out=args.json, check_llm=args.llm)
 
     if args.cmd == "paths":
@@ -179,7 +205,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "db-search":
         from .db_search_fts import run_db_search
-
         db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         return run_db_search(db_path, q=args.q, k=args.k, corpus=args.corpus)
 
@@ -237,7 +262,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "init-corpus":
         from .init_corpus import init_corpus
-
         paths = init_corpus(cfg.project_root, corpus_id=args.corpus_id, title=args.title)
         print(str(paths.provenance))
         print(str(paths.sources))
@@ -246,7 +270,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "answer-db":
         from .answer_db import AnswerDbArgs, run_answer_db
-
         db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         vec_dir = (cfg.project_root / "indexes" / "vec_faiss_global").resolve()
         embed_model = getattr(cfg, "embed_model", None)
@@ -280,7 +303,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "answer-batch-db":
         from .answer_batch_db import BatchArgs, run_answer_batch_db
-
         db_path = cfg.project_root / "db" / "scriptorium.sqlite"
         vec_dir = (cfg.project_root / "indexes" / "vec_faiss_global").resolve()
         embed_model = getattr(cfg, "embed_model", None)
@@ -318,7 +340,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "gloss-db":
         from .gloss_db import GlossDbArgs, run_gloss_db
-
         db_path = cfg.project_root / "db" / "scriptorium.sqlite"
 
         llm_base = args.llm_base_url.strip() if args.llm_base_url else os.getenv("SCRIPTORIUM_LLM_BASE_URL", "http://localhost:1234/v1")
@@ -349,7 +370,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "gloss-batch-db":
         from .gloss_batch_db import BatchArgs, run_gloss_batch_db
-
         db_path = cfg.project_root / "db" / "scriptorium.sqlite"
 
         llm_base = args.llm_base_url.strip() if args.llm_base_url else os.getenv("SCRIPTORIUM_LLM_BASE_URL", "http://localhost:1234/v1")
@@ -378,21 +398,67 @@ def main(argv: list[str] | None = None) -> int:
         run_gloss_batch_db(a)
         return 0
 
+    if args.cmd == "gloss-import-db":
+        from .ai_layers_db import import_gloss_run
+        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
+        run_dir = Path(args.run_dir)
+        run_dir = run_dir if run_dir.is_absolute() else (cfg.project_root / run_dir).resolve()
+        res = import_gloss_run(db_path, run_dir)
+        print(_json_min(res))
+        return 0
+
+    if args.cmd == "answer-import-db":
+        from .ai_layers_db import import_answer_run
+        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
+        run_dir = Path(args.run_dir)
+        run_dir = run_dir if run_dir.is_absolute() else (cfg.project_root / run_dir).resolve()
+        res = import_answer_run(db_path, run_dir)
+        print(_json_min(res))
+        return 0
+
+    if args.cmd == "gloss-search":
+        from .ai_layers_db import gloss_search
+        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
+        rows = gloss_search(db_path, q=args.q, k=int(args.k), corpus=str(args.corpus))
+        if not rows:
+            print(f"[OK] 0 hits (q={args.q!r}, corpus={args.corpus!r})")
+            return 0
+        print(f"[OK] hits={len(rows)} (q={args.q!r}, corpus={args.corpus!r})")
+        for r in rows:
+            print(f"{r['corpus_id']}	{r['id']}	{r['work_id']}	{r['loc']}")
+            print(f"  gloss: {r['gloss']}")
+            if r.get("literal"):
+                print(f"  literal: {r['literal']}")
+        return 0
+
+    if args.cmd == "answer-search":
+        from .ai_layers_db import answer_search
+        db_path = cfg.project_root / "db" / "scriptorium.sqlite"
+        rows = answer_search(db_path, q=args.q, k=int(args.k), corpus=str(args.corpus))
+        if not rows:
+            print(f"[OK] 0 hits (q={args.q!r}, corpus={args.corpus!r})")
+            return 0
+        print(f"[OK] hits={len(rows)} (q={args.q!r}, corpus={args.corpus!r})")
+        for r in rows:
+            score = r.get("score")
+            score_s = f"{score:.4f}" if isinstance(score, float) else ("" if score is None else str(score))
+            print(f"{r.get('run_id','')}\t{r.get('corpus_filter','')}\t{score_s}")
+            print(f"  q: {r.get('query_snip','')}")
+            print(f"  a: {r.get('answer_snip','')}")
+        return 0
+
     if args.cmd == "catalog-status":
         from .catalog_ops import run_catalog_status
-
         return run_catalog_status(cfg.project_root)
 
     if args.cmd == "catalog-fetch":
         from .catalog_ops import run_catalog_fetch
-
         src_ids = [x for x in (args.source_id or []) if x]
         run_catalog_fetch(cfg.project_root, source_ids=src_ids if src_ids else None)
         return 0
 
     if args.cmd == "catalog-ingest":
         from .catalog_ops import run_catalog_ingest
-
         cids = [x for x in (args.corpus_id or []) if x]
         return run_catalog_ingest(cfg.project_root, corpus_ids=cids if cids else None)
 
@@ -425,7 +491,6 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.snapshot and ret == 0:
             from .snapshot_bundle import build_snapshot_bundle
-
             zip_path = build_snapshot_bundle(
                 project_root=cfg.project_root,
                 window=str(cfg.window),
@@ -435,7 +500,6 @@ def main(argv: list[str] | None = None) -> int:
                 include_extra=["docs/RIGHTS_LEDGER.md", "docs/PROVENANCE_TEMPLATE.json"],
             )
             print(str(zip_path))
-
         return ret
 
     raise SystemExit("unreachable")
