@@ -59,13 +59,18 @@ jobs:
           python -m scriptorium answer-import-db --config configs/sample_demo_ci_strict.toml --run-dir runs/answer_db/20000101_000000_ci_seed_king
           python -m scriptorium check-ai-fts --config configs/sample_demo_ci_strict.toml --json
 
-          # Assert answer-search finds the seeded row (prefix query)
+          # Assert answer-search finds the seeded row (prefix query) using cfg.db_path
           python - << 'PY'
-          from pathlib import Path
+          from scriptorium.config import load_config
           from scriptorium.ai_layers_db import answer_search
-          db = Path("db/scriptorium.sqlite")
+
+          cfg = load_config("configs/sample_demo_ci_strict.toml")
+          db = cfg.db_path
+
           hits = answer_search(db, q="king*", k=5, corpus="oe_bede_sample")
           if not hits:
               raise SystemExit("CI assert failed: answer-search returned 0 hits for king* in oe_bede_sample")
           print(f"CI assert ok: {len(hits)} hit(s)")
           PY
+
+
