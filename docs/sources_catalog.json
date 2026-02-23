@@ -1,117 +1,216 @@
 {
-    "schema":  "scriptorium.sources_catalog.v1",
-    "generated_utc":  "",
-    "sources":  [
-                    {
-                        "source_id":  "echoe_repo",
-                        "type":  "git",
-                        "repo":  "https://github.com/ECHOEProject/echoe.git",
-                        "dest":  "data_raw/echoe_repo",
-                        "ref":  "",
-                        "license":  "GPL-3.0",
-                        "distributable":  true,
-                        "notes":  "Shared source for echoe plaintext + TEI ingests."
-                    },
-                    {
-                        "source_id":  "beowulf_9700_manual",
-                        "type":  "manual",
-                        "repo":  "",
-                        "url":  "",
-                        "dest":  "data_raw/oe_beowulf_9700",
-                        "ref":  "",
-                        "license":  "Project Gutenberg License",
-                        "distributable":  true,
-                        "notes":  "You already ingested; keep manual unless you want automated download later."
-                    },
-                    {
-                        "source_id":  "asc_A_manual",
-                        "type":  "manual",
-                        "repo":  "",
-                        "url":  "",
-                        "dest":  "data_raw/asc_A",
-                        "ref":  "",
-                        "license":  "UNVERIFIED",
-                        "distributable":  false,
-                        "notes":  "Local-only until rights are verified."
-                    },
-                    {
-                        "source_id":  "oe_bede_manual",
-                        "type":  "manual",
-                        "repo":  "",
-                        "url":  "",
-                        "dest":  "data_raw/oe_bede",
-                        "ref":  "",
-                        "license":  "UNVERIFIED",
-                        "distributable":  false,
-                        "notes":  "Local-only until rights are verified."
-                    },
-                    {
-                        "source_id":  "gutenberg_demo_oe",
-                        "type":  "http",
-                        "url":  "https://www.gutenberg.org/cache/epub/9700/pg9700.txt",
-                        "dest":  "data_raw/gutenberg_demo_oe/pg.txt",
-                        "ref":  "",
-                        "license":  "Project Gutenberg License",
-                        "distributable":  true,
-                        "notes":  "Automated HTTP download for demo corpus"
-                    }
-                ],
-    "ingests":  [
-                    {
-                        "corpus_id":  "echoe",
-                        "source_id":  "echoe_repo",
-                        "enabled":  true,
-                        "cmd":  [
-                                    "{python}",
-                                    "src/ingest/ingest_echoe_plaintext.py",
-                                    "--root",
-                                    "{root}",
-                                    "--in-dir",
-                                    "data_raw/echoe_repo/plaintext",
-                                    "--out",
-                                    "data_proc/echoe_prod.jsonl"
-                                ],
-                        "outputs":  [
-                                        "data_proc/echoe_prod.jsonl"
-                                    ]
-                    },
-                    {
-                        "corpus_id":  "echoe_tei",
-                        "source_id":  "echoe_repo",
-                        "enabled":  true,
-                        "cmd":  [
-                                    "{python}",
-                                    "src/ingest/ingest_echoe_tei.py",
-                                    "--root",
-                                    "{root}",
-                                    "--in-dir",
-                                    "data_raw/echoe_repo/xml",
-                                    "--out",
-                                    "data_proc/echoe_tei_prod.jsonl"
-                                ],
-                        "outputs":  [
-                                        "data_proc/echoe_tei_prod.jsonl"
-                                    ]
-                    },
-                    {
-                        "corpus_id":  "gutenberg_demo_oe",
-                        "source_id":  "gutenberg_demo_oe",
-                        "enabled":  true,
-                        "cmd":  [
-                                    "{python}",
-                                    "src/ingest/ingest_gutenberg_txt.py",
-                                    "--root",
-                                    "{root}",
-                                    "--in",
-                                    "data_raw/gutenberg_demo_oe/pg.txt",
-                                    "--out",
-                                    "data_proc/gutenberg_demo_oe_prod.jsonl",
-                                    "--corpus-id",
-                                    "gutenberg_demo_oe"
-                                ],
-                        "outputs":  [
-                                        "data_proc/gutenberg_demo_oe_prod.jsonl"
-                                    ]
-                    }
-                ]
+  "schema": "scriptorium.sources_catalog.v1",
+  "generated_utc": "",
+  "sources": [
+    {
+      "source_id": "asc_A_manual",
+      "type": "manual",
+      "repo": "",
+      "url": "",
+      "dest": "data_raw/asc_A",
+      "ref": "",
+      "license": "UNVERIFIED",
+      "distributable": false,
+      "notes": "Local-only until rights are verified."
+    },
+    {
+      "source_id": "beowulf_9700_manual",
+      "type": "manual",
+      "repo": "",
+      "url": "",
+      "dest": "data_raw/oe_beowulf_9700",
+      "ref": "",
+      "license": "Project Gutenberg License",
+      "distributable": true,
+      "notes": "You already ingested; keep manual unless you want automated download later."
+    },
+    {
+      "source_id": "echoe_repo",
+      "type": "git",
+      "repo": "https://github.com/ECHOEProject/echoe.git",
+      "dest": "data_raw/echoe_repo",
+      "ref": "",
+      "license": "GPL-3.0",
+      "distributable": true,
+      "notes": "Shared source for echoe plaintext + TEI ingests."
+    },
+    {
+      "source_id": "gutenberg_demo_oe",
+      "type": "http",
+      "url": "https://www.gutenberg.org/cache/epub/9700/pg9700.txt",
+      "dest": "data_raw/gutenberg_demo_oe/pg.txt",
+      "ref": "",
+      "license": "Project Gutenberg License",
+      "distributable": true,
+      "notes": "Automated HTTP download for demo corpus"
+    },
+    {
+      "source_id": "oe_bede_manual",
+      "type": "manual",
+      "repo": "",
+      "url": "",
+      "dest": "data_raw/oe_bede",
+      "ref": "",
+      "license": "UNVERIFIED",
+      "distributable": false,
+      "notes": "Local-only until rights are verified."
+    },
+    {
+      "source_id": "pg_14529_physio",
+      "type": "http",
+      "url": "https://www.gutenberg.org/ebooks/14529.txt.utf-8",
+      "dest": "data_raw/pg_14529_physio/pg14529.txt",
+      "ref": "",
+      "license": "Project Gutenberg License",
+      "distributable": true,
+      "notes": "The Old English Physiologus (PG #14529) plain text UTF-8"
+    },
+    {
+      "source_id": "pg_45861_aelfric_grammar",
+      "type": "http",
+      "url": "https://www.gutenberg.org/ebooks/45861.txt.utf-8",
+      "dest": "data_raw/pg_45861_aelfric_grammar/pg45861.txt",
+      "ref": "",
+      "license": "Project Gutenberg License",
+      "distributable": true,
+      "notes": "PG #45861: Ælfrics Grammatik und Glossar (German + Old English; Plain Text UTF-8)"
+    },
+    {
+      "source_id": "pg_9701_beowulf",
+      "type": "http",
+      "url": "https://www.gutenberg.org/ebooks/9701.txt.utf-8",
+      "dest": "data_raw/pg_9701_beowulf/pg9701.txt",
+      "ref": "",
+      "license": "Project Gutenberg License",
+      "distributable": true,
+      "notes": "PG #9701: Beowulf + Finnsburh fragment (Plain Text UTF-8)"
+    }
+  ],
+  "ingests": [
+    {
+      "corpus_id": "echoe",
+      "source_id": "echoe_repo",
+      "enabled": true,
+      "cmd": [
+        "{python}",
+        "src/ingest/ingest_echoe_plaintext.py",
+        "--root",
+        "{root}",
+        "--in-dir",
+        "data_raw/echoe_repo/plaintext",
+        "--out",
+        "data_proc/echoe_prod.jsonl"
+      ],
+      "outputs": [
+        "data_proc/echoe_prod.jsonl"
+      ]
+    },
+    {
+      "corpus_id": "echoe_tei",
+      "source_id": "echoe_repo",
+      "enabled": true,
+      "cmd": [
+        "{python}",
+        "src/ingest/ingest_echoe_tei.py",
+        "--root",
+        "{root}",
+        "--in-dir",
+        "data_raw/echoe_repo/xml",
+        "--out",
+        "data_proc/echoe_tei_prod.jsonl"
+      ],
+      "outputs": [
+        "data_proc/echoe_tei_prod.jsonl"
+      ]
+    },
+    {
+      "corpus_id": "gutenberg_demo_oe",
+      "source_id": "gutenberg_demo_oe",
+      "enabled": true,
+      "cmd": [
+        "{python}",
+        "src/ingest/ingest_gutenberg_txt.py",
+        "--root",
+        "{root}",
+        "--in",
+        "data_raw/gutenberg_demo_oe/pg.txt",
+        "--out",
+        "data_proc/gutenberg_demo_oe_prod.jsonl",
+        "--corpus-id",
+        "gutenberg_demo_oe"
+      ],
+      "outputs": [
+        "data_proc/gutenberg_demo_oe_prod.jsonl"
+      ]
+    },
+    {
+      "corpus_id": "oe_aelfric_45861",
+      "source_id": "pg_45861_aelfric_grammar",
+      "enabled": true,
+      "cmd": [
+        "{python}",
+        "src/ingest/ingest_gutenberg_txt.py",
+        "--root",
+        "{root}",
+        "--in",
+        "data_raw/pg_45861_aelfric_grammar/pg45861.txt",
+        "--out",
+        "data_proc/oe_aelfric_45861_prod.jsonl",
+        "--corpus-id",
+        "oe_aelfric_45861",
+        "--lang",
+        "mul",
+        "--strip-gutenberg-header"
+      ],
+      "outputs": [
+        "data_proc/oe_aelfric_45861_prod.jsonl"
+      ]
+    },
+    {
+      "corpus_id": "oe_beowulf_9701",
+      "source_id": "pg_9701_beowulf",
+      "enabled": true,
+      "cmd": [
+        "{python}",
+        "src/ingest/ingest_gutenberg_txt.py",
+        "--root",
+        "{root}",
+        "--in",
+        "data_raw/pg_9701_beowulf/pg9701.txt",
+        "--out",
+        "data_proc/oe_beowulf_9701_prod.jsonl",
+        "--corpus-id",
+        "oe_beowulf_9701",
+        "--lang",
+        "ang",
+        "--strip-gutenberg-header"
+      ],
+      "outputs": [
+        "data_proc/oe_beowulf_9701_prod.jsonl"
+      ]
+    },
+    {
+      "corpus_id": "oe_physio_14529",
+      "source_id": "pg_14529_physio",
+      "enabled": true,
+      "cmd": [
+        "{python}",
+        "src/ingest/ingest_gutenberg_txt.py",
+        "--root",
+        "{root}",
+        "--in",
+        "data_raw/pg_14529_physio/pg14529.txt",
+        "--out",
+        "data_proc/oe_physio_14529_prod.jsonl",
+        "--corpus-id",
+        "oe_physio_14529",
+        "--lang",
+        "ang",
+        "--strip-gutenberg-header"
+      ],
+      "outputs": [
+        "data_proc/oe_physio_14529_prod.jsonl"
+      ]
+    }
+  ]
 }
