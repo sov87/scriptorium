@@ -32,6 +32,47 @@ python -m scriptorium retrieve  --config configs\sample_demo_ci.toml --q "What i
 python -m scriptorium answer-db --config configs\sample_demo_ci.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample --dry-run
 ```
 
+### Optional — Seed an answer run and test answer-search (no LLM required)
+
+`answer-search` only searches **imported answers** (`answers_fts`). For a reproducible smoke test (local or CI) without calling an LLM, you can seed a minimal `answer-db` run directory and import it:
+
+```powershell
+@'
+from pathlib import Path
+import json
+
+run = Path("runs/answer_db/20000101_000000_seed_king")
+run.mkdir(parents=True, exist_ok=True)
+
+(run / "meta.json").write_text(
+    json.dumps({"run_id": run.name, "corpus_filter": "oe_bede_sample"}, ensure_ascii=False, separators=(",", ":")),
+    encoding="utf-8",
+)
+(run / "retrieval.json").write_text(
+    json.dumps({"query": "king", "corpus": "oe_bede_sample"}, ensure_ascii=False, separators=(",", ":")),
+    encoding="utf-8",
+)
+(run / "answer.json").write_text(
+    json.dumps({"answer": "Seeded answer containing king (smoke test).", "citations": [], "notes": []}, ensure_ascii=False, separators=(",", ":")),
+    encoding="utf-8",
+)
+(run / "validation.json").write_text("{}", encoding="utf-8")
+
+print(str(run))
+'@ | python
+```
+
+Import, check FTS, then search (use prefix queries):
+
+```powershell
+python -m scriptorium answer-import-db --config configs\sample_demo_ci_strict.toml --run-dir runs\answer_db\20000101_000000_seed_king
+python -m scriptorium check-ai-fts      --config configs\sample_demo_ci_strict.toml --json
+python -m scriptorium answer-search     --config configs\sample_demo_ci_strict.toml --q "king*" --k 10 --corpus oe_bede_sample
+```
+
+For real answer generation (non-dry-run), configure an LLM endpoint and run `answer-db` without `--dry-run`, then import the printed run directory.
+
+
 ### Option B — Strict local-first config (embedding model must already be on disk)
 
 Provision the model once (creates `models/all-MiniLM-L6-v2/`):
@@ -68,6 +109,6 @@ GitHub Actions uses the strict path:
 
 - provisions `models/all-MiniLM-L6-v2/`
 - swaps `docs/corpora.public.json` into place as `docs/corpora.json`
-- runs strict doctor + build + smoke
+- runs strict doctor + build + smoke (including a seeded answer import/search to exercise `answer-import-db`, `answers_fts`, and `answer-search`)
 
 See `.github/workflows/ci.yml` for the exact sequence.
