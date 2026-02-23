@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
@@ -85,6 +86,107 @@ def _read_jsonl(path: Path) -> Iterable[dict[str, Any]]:
 
 def _fts_delete_run(con: sqlite3.Connection, table: str, run_id: str) -> None:
     con.execute(f"delete from {table} where run_id=?", (run_id,))
+
+
+
+
+def _extract_cites(citations_json: str, retrieval_json: str, max_items: int = 12) -> list[str]:
+    '''Best-effort extraction of cited corpus_id:segment_id pairs from stored JSON blobs.
+
+    Scope: parse stored JSON fields only (citations_json / retrieval_json). No inference from answer text.
+    Strategy:
+      - Prefer explicit fields in dicts (corpus_id/corpus + segment_id/id).
+      - Also scan all string values for corpus_id:segment_id patterns (e.g., oe_beowulf_9701:000959).
+      - Recursively walk dict/list structures and stop at max_items.
+    '''
+    out: list[str] = []
+    seen: set[str] = set()
+
+    # Require a letter-starting corpus id to avoid accidental matches (e.g., "http:").
+    _re = re.compile(r"([A-Za-z][A-Za-z0-9_]{2,}):([0-9]{3,})")
+
+    def add(corpus: str, seg) -> None:
+        if seg is None:
+            return
+        corpus_s = (str(corpus) if corpus is not None else "").strip()
+        seg_s = (str(seg) if seg is not None else "").strip()
+        if not corpus_s or not seg_s:
+            return
+
+        # Normalize cases where seg already includes a corpus prefix, e.g. "oe_beowulf_9701:000959".
+        if ":" in seg_s:
+            mm = _re.search(seg_s)
+            if mm:
+                corpus_s = mm.group(1)
+                seg_s = mm.group(2)
+            elif seg_s.startswith(corpus_s + ":"):
+                seg_s = seg_s.split(":", 1)[1]
+
+        key = f"{corpus_s}:{seg_s}"
+        if key in seen:
+            return
+        seen.add(key)
+        out.append(key)
+
+    def walk(obj) -> None:
+        if len(out) >= max_items:
+            return
+
+        if isinstance(obj, dict):
+            corpus = ""
+            seg = None
+
+            for ck in ("corpus_id", "corpus", "corpus_filter"):
+                v = obj.get(ck)
+                if isinstance(v, str) and v:
+                    corpus = v
+                    break
+
+            for sk in ("segment_id", "id", "seg_id"):
+                v = obj.get(sk)
+                if isinstance(v, (str, int)) and v is not None and v != "":
+                    seg = v
+                    break
+
+            if corpus and seg is not None:
+                add(corpus, seg)
+
+            for v in obj.values():
+                walk(v)
+                if len(out) >= max_items:
+                    return
+            return
+
+        if isinstance(obj, list):
+            for it in obj:
+                walk(it)
+                if len(out) >= max_items:
+                    return
+            return
+
+        if isinstance(obj, str):
+            for m in _re.finditer(obj):
+                add(m.group(1), m.group(2))
+                if len(out) >= max_items:
+                    return
+            return
+
+        return
+
+    def consume(s: str) -> None:
+        if not s:
+            return
+        try:
+            parsed = json.loads(s)
+        except Exception:
+            walk(s)
+            return
+        walk(parsed)
+
+    consume(citations_json)
+    consume(retrieval_json)
+
+    return out
 
 
 def import_gloss_run(db_path: Path, run_dir: Path) -> dict[str, Any]:
@@ -332,11 +434,13 @@ def gloss_search(db_path: Path, q: str, k: int = 10, corpus: str = "") -> list[d
         return out
     finally:
         con.close()
-def answer_search(db_path: Path, q: str, k: int = 10, corpus: str = "") -> list[dict[str, Any]]:
+def answer_search(db_path: Path, q: str, k: int = 10, corpus: str = "", show_cites: bool = False) -> list[dict[str, Any]]:
     """Search imported answers via FTS.
 
     v1 scope: return run-level hits (no segment_id extraction). Corpus filtering is applied
     by joining to the real `answers` table and filtering on `answers.corpus_filter`.
+
+    v2: if show_cites=True, parse stored JSON fields to surface cited corpus_id:segment_id pairs.
     """
     con = sqlite3.connect(str(db_path))
     try:
@@ -349,28 +453,54 @@ def answer_search(db_path: Path, q: str, k: int = 10, corpus: str = "") -> list[
             where += " and a.corpus_filter=?"
             params.append(corpus)
 
-        rows = con.execute(
-            f"""
-            select
-              a.run_id,
-              a.query,
-              a.corpus_filter,
-              a.answer,
-              bm25(answers_fts) as score
-            from answers_fts
-            join answers a on a.run_id=answers_fts.run_id
-            where {where}
-            order by score
-            limit ?
-            """,
-            (*params, int(k)),
-        ).fetchall()
+        if show_cites:
+            rows = con.execute(
+                f"""
+                select
+                  a.run_id,
+                  a.query,
+                  a.corpus_filter,
+                  a.answer,
+                  a.citations_json,
+                  a.retrieval_json,
+                  bm25(answers_fts) as score
+                from answers_fts
+                join answers a on a.run_id=answers_fts.run_id
+                where {where}
+                order by score
+                limit ?
+                """,
+                (*params, int(k)),
+            ).fetchall()
+        else:
+            rows = con.execute(
+                f"""
+                select
+                  a.run_id,
+                  a.query,
+                  a.corpus_filter,
+                  a.answer,
+                  bm25(answers_fts) as score
+                from answers_fts
+                join answers a on a.run_id=answers_fts.run_id
+                where {where}
+                order by score
+                limit ?
+                """,
+                (*params, int(k)),
+            ).fetchall()
 
         out: list[dict[str, Any]] = []
         for r in rows:
-            run_id, query, corpus_filter, answer, score = r
+            if show_cites:
+                run_id, query, corpus_filter, answer, citations_json, retrieval_json, score = r
+            else:
+                run_id, query, corpus_filter, answer, score = r
+                citations_json, retrieval_json = "", ""
+
             query_s = query if isinstance(query, str) else ""
             answer_s = answer if isinstance(answer, str) else ""
+            cites = _extract_cites(citations_json, retrieval_json) if show_cites else []
             out.append(
                 {
                     "run_id": run_id,
@@ -379,6 +509,7 @@ def answer_search(db_path: Path, q: str, k: int = 10, corpus: str = "") -> list[
                     "query_snip": query_s[:120],
                     "answer_snip": answer_s[:300],
                     "score": float(score) if score is not None else None,
+                    "cites": cites,
                 }
             )
         return out
