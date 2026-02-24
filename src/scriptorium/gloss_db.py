@@ -5,11 +5,16 @@ import os
 import re
 import sqlite3
 import time
-import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
+
+try:
+    from .llm_openai import chat_completions_raw, pick_first_model_id
+except Exception:  # pragma: no cover
+    from llm_openai import chat_completions_raw, pick_first_model_id
+
 
 
 def utc_stamp() -> str:
@@ -25,44 +30,6 @@ def slug(s: str) -> str:
     s = re.sub(r"[^A-Za-z0-9 _-]+", "", s)
     s = s.replace(" ", "_")
     return s[:48] if s else "x"
-
-
-def _http_json(url: str, payload: dict[str, Any], api_key: str, timeout_s: int = 180) -> dict[str, Any]:
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url=url,
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-        return json.loads(resp.read().decode("utf-8", errors="replace"))
-
-
-def _http_get_json(url: str, api_key: str, timeout_s: int = 30) -> dict[str, Any]:
-    req = urllib.request.Request(
-        url=url,
-        headers={"Authorization": f"Bearer {api_key}"},
-        method="GET",
-    )
-    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-        return json.loads(resp.read().decode("utf-8", errors="replace"))
-
-
-def pick_model_id(base_url: str, api_key: str) -> str | None:
-    try:
-        j = _http_get_json(base_url.rstrip("/") + "/models", api_key=api_key, timeout_s=15)
-        data = j.get("data") or []
-        if isinstance(data, list) and data:
-            mid = data[0].get("id")
-            if isinstance(mid, str) and mid:
-                return mid
-    except Exception:
-        return None
-    return None
 
 
 def _read_lines(p: Path) -> list[str]:
@@ -247,7 +214,7 @@ def run_gloss_db(a: GlossDbArgs) -> Path:
     base = a.llm_base_url.rstrip("/")
     model = a.llm_model.strip()
     if not model and not a.dry_run:
-        picked = pick_model_id(base, a.llm_api_key)
+        picked = pick_first_model_id(base_url=base, api_key=a.llm_api_key, timeout_seconds=15)
         if picked:
             model = picked
         else:
@@ -290,9 +257,17 @@ def run_gloss_db(a: GlossDbArgs) -> Path:
 
             t0 = time.time()
             try:
-                resp = _http_json(base + "/chat/completions", payload, api_key=a.llm_api_key, timeout_s=240)
+                rec = chat_completions_raw(
+                    base_url=base,
+                    model=model,
+                    messages=payload["messages"],
+                    temperature=float(a.temperature),
+                    max_output_tokens=int(a.max_tokens),
+                    api_key=a.llm_api_key,
+                    timeout_seconds=240,
+                )
                 dt = time.time() - t0
-                content = resp["choices"][0]["message"]["content"]
+                content = rec["content"]
             except Exception as e:
                 failed += 1
                 f_err.write(

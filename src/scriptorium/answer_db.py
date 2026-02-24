@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import difflib
 import unicodedata
 import os
 import re
 import sqlite3
 import sys
 import time
-import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,6 +16,12 @@ from typing import Any
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
+
+try:
+    from .llm_openai import chat_completions_raw, pick_first_model_id
+except Exception:  # pragma: no cover
+    from llm_openai import chat_completions_raw, pick_first_model_id
+
 
 
 def utc_stamp() -> str:
@@ -46,54 +50,17 @@ def rrf_fuse(a: list[str], b: list[str], k: int = 60) -> list[str]:
     return [rid for rid, _ in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
 
 
-def _http_json(url: str, payload: dict[str, Any], api_key: str, timeout_s: int = 120) -> dict[str, Any]:
-    data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url=url,
-        data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-        return json.loads(resp.read().decode("utf-8", errors="replace"))
-
-
-def _http_get_json(url: str, api_key: str, timeout_s: int = 30) -> dict[str, Any]:
-    req = urllib.request.Request(
-        url=url,
-        headers={"Authorization": f"Bearer {api_key}"},
-        method="GET",
-    )
-    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-        return json.loads(resp.read().decode("utf-8", errors="replace"))
-
-
-def pick_model_id(base_url: str, api_key: str) -> str | None:
-    try:
-        j = _http_get_json(base_url.rstrip("/") + "/models", api_key=api_key, timeout_s=15)
-        data = j.get("data") or []
-        if data and isinstance(data, list):
-            mid = data[0].get("id")
-            if isinstance(mid, str) and mid:
-                return mid
-    except Exception:
-        return None
-    return None
-
-
 FTS_TOKEN_RE = re.compile(r"[0-9A-Za-z\u00C0-\u024F\u1E00-\u1EFFþðæǣÞÐÆǢ]+")
 
 def fts_query(q: str) -> str:
     # FTS5 MATCH is not "free text": punctuation like ? can break parsing.
     toks = FTS_TOKEN_RE.findall(q)
-    if not toks:
-        return q
     return " ".join(toks)
+
 def fts_ids(con: sqlite3.Connection, q: str, k: int, corpus: str) -> list[str]:
     q2 = fts_query(q)
+    if not q2.strip():
+        return []
     where = "segments_fts match ?"
     params: list[Any] = [q2]
     if corpus:
@@ -193,7 +160,7 @@ def build_prompt(query: str, passages: list[dict[str, Any]]) -> tuple[str, str]:
     for p in passages:
         txt = p["text"]
         if len(txt) > 1600:
-            txt = txt[:1600] + "…"
+            txt = txt[:1600]
         blocks.append(
             f"ID: {p['id']}\nCORPUS: {p['corpus_id']}\nWORK: {p['work_id']}\nLOC: {p['loc']}\nTEXT:\n{txt}\n"
         )
@@ -248,25 +215,6 @@ def validate_answer_obj(
         def _norm_ws(s: str) -> str:
             return " ".join(s.split()).strip()
 
-        def _best_window_ratio(needle: str, hay: str) -> float:
-            needle = needle.casefold()
-            hay = hay.casefold()
-            if not needle or not hay:
-                return 0.0
-            n = len(needle)
-            if n >= len(hay):
-                return difflib.SequenceMatcher(None, needle, hay).ratio()
-            step = max(1, n // 20)
-            best = 0.0
-            for j in range(0, len(hay) - n + 1, step):
-                w = hay[j : j + n]
-                r = difflib.SequenceMatcher(None, needle, w).ratio()
-                if r > best:
-                    best = r
-                    if best >= 0.98:
-                        break
-            return best
-
         for i, c in enumerate(cits):
             if not isinstance(c, dict):
                 errs.append(f"citations[{i}] not an object")
@@ -314,18 +262,8 @@ def validate_answer_obj(
             if qn and qn in sn:
                 continue
 
-            # Fuzzy fallback only for longer quotes
-            if len(qn) < 40:
-                errs.append(f"citations[{i}].quote not found as substring in source text")
-                continue
-
-            similarity = _best_window_ratio(qn, sn)
-            if similarity < 0.90:
-                errs.append(
-                    f"citations[{i}].quote does not match source text "
-                    f"(similarity {similarity:.3f} < 0.90). "
-                    f"Quoted: {q[:120]!r}..."
-                )
+            errs.append(f"citations[{i}].quote not found as literal substring in source text")
+            continue
 
     notes = obj.get("notes")
     if notes is not None and (not isinstance(notes, list) or any(not isinstance(x, str) for x in notes)):
@@ -425,7 +363,7 @@ def run_answer_db(a: AnswerDbArgs) -> Path:
     base = a.llm_base_url.rstrip("/")
     model = a.llm_model.strip()
     if not model:
-        picked = pick_model_id(base, a.llm_api_key)
+        picked = pick_first_model_id(base_url=base, api_key=a.llm_api_key, timeout_seconds=15)
         if picked:
             model = picked
         else:
@@ -467,18 +405,25 @@ def run_answer_db(a: AnswerDbArgs) -> Path:
         (out_dir / f"prompt_user_attempt{attempt}.txt").write_text(user, encoding="utf-8")
 
         t0 = time.time()
-        resp = _http_json(base + "/chat/completions", payload, api_key=a.llm_api_key, timeout_s=240)
+        rec = chat_completions_raw(
+            base_url=base,
+            model=model,
+            messages=payload["messages"],
+            temperature=float(a.temperature),
+            max_output_tokens=int(a.max_tokens),
+            api_key=a.llm_api_key,
+            timeout_seconds=240,
+        )
+        resp = rec["response"]
+        content = rec["content"]
         dt = time.time() - t0
 
         (out_dir / f"llm_response_raw_attempt{attempt}.json").write_text(
             json.dumps(resp, ensure_ascii=False, indent=2), encoding="utf-8"
         )
 
-        content = ""
-        try:
-            content = resp["choices"][0]["message"]["content"]
-        except Exception:
-            errs = [f"Unexpected LLM response shape on attempt {attempt}"]
+        if not isinstance(content, str):
+            errs = [f"Unexpected LLM content type on attempt {attempt}"]
             continue
 
         (out_dir / f"answer_raw_attempt{attempt}.txt").write_text(content, encoding="utf-8")
