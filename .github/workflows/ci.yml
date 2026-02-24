@@ -38,6 +38,47 @@ jobs:
         run: |
           python -m scriptorium doctor --config configs/sample_demo_ci_strict.toml --strict --json
           python -m scriptorium db-build --config configs/sample_demo_ci_strict.toml --overwrite
+
+          # Validator smoke: quote must be real (no hallucinated quotes)
+          python - << 'PY'
+          import sqlite3
+          from scriptorium.config import load_config
+          from scriptorium.answer_db import validate_answer_obj
+
+          cfg = load_config("configs/sample_demo_ci_strict.toml")
+          db = cfg.db_path
+
+          con = sqlite3.connect(str(db))
+          try:
+              row = con.execute(
+                  "select id, text from segments where corpus_id=? and text is not null and length(text) >= 120 limit 1",
+                  ("oe_bede_sample",),
+              ).fetchone()
+          finally:
+              con.close()
+
+          if not row:
+              raise SystemExit("CI validator seed failed: no suitable segment text for oe_bede_sample")
+
+          sid, text = row
+          text = text or ''
+          passages = [{'id': sid, 'text': text}]
+          allowed_ids = {sid}
+
+          good_quote = ' '.join(text[:120].split())
+          obj_good = {'answer': 'x', 'citations': [{'id': sid, 'quote': good_quote}], 'notes': []}
+          errs_good = validate_answer_obj(obj_good, allowed_ids, passages)
+          if errs_good:
+              raise SystemExit('CI validator assert failed: good quote rejected: ' + '; '.join(errs_good))
+
+          bad_quote = 'THIS QUOTE DOES NOT APPEAR IN THE SOURCE TEXT AND SHOULD FAIL VALIDATION'
+          obj_bad = {'answer': 'x', 'citations': [{'id': sid, 'quote': bad_quote}], 'notes': []}
+          errs_bad = validate_answer_obj(obj_bad, allowed_ids, passages)
+          if not errs_bad:
+              raise SystemExit('CI validator assert failed: bad quote was accepted')
+          print('CI validator assert ok')
+          PY
+
           python -m scriptorium vec-build --config configs/sample_demo_ci_strict.toml --out-dir indexes/vec_faiss_global --batch 16
           python -m scriptorium db-search --config configs/sample_demo_ci_strict.toml --q "lareow" --k 3 --corpus oe_bede_sample
           python -m scriptorium retrieve --config configs/sample_demo_ci_strict.toml --q "What is said about the lareow?" --k 5 --corpus oe_bede_sample

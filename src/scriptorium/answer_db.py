@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import difflib
 import os
 import re
 import sqlite3
@@ -172,9 +173,9 @@ def build_prompt(query: str, passages: list[dict[str, Any]]) -> tuple[str, str]:
     system = (
         "You are producing a scholarly, retrieval-grounded answer.\n"
         "Return ONLY valid JSON. No markdown. No extra keys.\n"
-        "You MUST cite ONLY from the provided candidate passages by their exact 'id'.\n"
+        "You MUST cite ONLY from the provided candidate passages by their exact 'id'.\nThe 'quote' field MUST be a literal substring of the passage text (copy-paste exact words, do not paraphrase or summarize).\n"
         "If the passages are insufficient, say so in the answer and cite what you used.\n"
-        "Do not invent citations.\n"
+        "Do not invent citations or quotes.\n"
         "\n"
         "JSON schema:\n"
         "{"
@@ -204,36 +205,115 @@ def build_prompt(query: str, passages: list[dict[str, Any]]) -> tuple[str, str]:
     return system, user
 
 
-def validate_answer_obj(obj: dict[str, Any], allowed_ids: set[str]) -> list[str]:
+def validate_answer_obj(
+    obj: dict[str, Any],
+    allowed_ids: set[str],
+    passages: list[dict[str, Any]] | None = None,
+) -> list[str]:
+    """
+    Full scholarly validation: ID must exist + quote must actually appear in the source text.
+    Prevents LLM hallucinations on quoted material.
+    """
     errs: list[str] = []
     if not isinstance(obj, dict):
         return ["root is not a JSON object"]
+
     if "answer" not in obj or not isinstance(obj.get("answer"), str):
         errs.append("missing/invalid 'answer' (string)")
+
     cits = obj.get("citations")
     if not isinstance(cits, list):
         errs.append("missing/invalid 'citations' (list)")
         cits = []
     else:
+        # Build quick lookup: id -> full text
+        id_to_text = {
+            p["id"]: p["text"]
+            for p in (passages or [])
+            if isinstance(p, dict) and isinstance(p.get("id"), str) and isinstance(p.get("text"), str)
+        }
+
+        def _norm_ws(s: str) -> str:
+            return " ".join(s.split()).strip()
+
+        def _best_window_ratio(needle: str, hay: str) -> float:
+            needle = needle.lower()
+            hay = hay.lower()
+            if not needle or not hay:
+                return 0.0
+            n = len(needle)
+            if n >= len(hay):
+                return difflib.SequenceMatcher(None, needle, hay).ratio()
+            step = max(1, n // 20)
+            best = 0.0
+            for j in range(0, len(hay) - n + 1, step):
+                w = hay[j : j + n]
+                r = difflib.SequenceMatcher(None, needle, w).ratio()
+                if r > best:
+                    best = r
+                    if best >= 0.98:
+                        break
+            return best
+
         for i, c in enumerate(cits):
             if not isinstance(c, dict):
                 errs.append(f"citations[{i}] not an object")
                 continue
+
             cid = c.get("id")
             if not isinstance(cid, str) or not cid:
                 errs.append(f"citations[{i}].id missing/invalid")
-            elif cid not in allowed_ids:
+                continue
+            if cid not in allowed_ids:
                 errs.append(f"citations[{i}].id not in candidates: {cid}")
-            q = c.get("quote")
-            if not isinstance(q, str) or not q:
-                errs.append(f"citations[{i}].quote missing/invalid")
-    notes = obj.get("notes")
-    if notes is None:
-        pass
-    elif not isinstance(notes, list) or any(not isinstance(x, str) for x in notes):
-        errs.append("invalid 'notes' (list of strings)")
-    return errs
+                continue
 
+            quote = c.get("quote")
+            if not isinstance(quote, str) or not quote.strip():
+                errs.append(f"citations[{i}].quote missing/invalid (must be non-empty string)")
+                continue
+
+            q = quote.strip()
+
+            # Guard against trivial “quotes”
+            if len(q) < 20:
+                errs.append(f"citations[{i}].quote too short (<20 chars); must be a real substring quote")
+                continue
+            if len(q) > 600:
+                errs.append(f"citations[{i}].quote too long (>600 chars); keep quotes concise")
+                continue
+
+            source_text = id_to_text.get(cid, "")
+            if not source_text:
+                errs.append(f"citations[{i}].id has no source text")
+                continue
+
+            if q in source_text:
+                continue
+
+            qn = _norm_ws(q)
+            sn = _norm_ws(source_text)
+            if qn and qn in sn:
+                continue
+
+            # Fuzzy fallback only for longer quotes
+            if len(qn) < 40:
+                errs.append(f"citations[{i}].quote not found as substring in source text")
+                continue
+
+            similarity = _best_window_ratio(qn, sn)
+            if similarity < 0.90:
+                errs.append(
+                    f"citations[{i}].quote does not match source text "
+                    f"(similarity {similarity:.3f} < 0.90). "
+                    f"Quoted: {q[:120]!r}..."
+                )
+
+    notes = obj.get("notes")
+    if notes is not None and (not isinstance(notes, list) or any(not isinstance(x, str) for x in notes)):
+        errs.append("invalid 'notes' (list of strings)")
+
+    return errs
 
 @dataclass
 class AnswerDbArgs:
@@ -315,40 +395,87 @@ def run_answer_db(a: AnswerDbArgs) -> Path:
         else:
             raise SystemExit("No llm_model provided and /models lookup failed.")
 
-    system, user = build_prompt(a.query, passages)
-    payload = {
+    system, user_base = build_prompt(a.query, passages)
+
+    payload_base = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
         "temperature": float(a.temperature),
         "max_tokens": int(a.max_tokens),
     }
 
     (out_dir / "prompt_system.txt").write_text(system, encoding="utf-8")
-    (out_dir / "prompt_user.txt").write_text(user, encoding="utf-8")
 
-    t0 = time.time()
-    resp = _http_json(base + "/chat/completions", payload, api_key=a.llm_api_key, timeout_s=240)
-    dt = time.time() - t0
+    obj: dict[str, Any] | None = None
+    errs: list[str] = ["uninitialized"]
+    dt = 0.0
+    attempts = 3
 
-    (out_dir / "llm_response_raw.json").write_text(json.dumps(resp, ensure_ascii=False, indent=2), encoding="utf-8")
+    for attempt in range(1, attempts + 1):
+        if attempt == 1:
+            user = user_base
+        else:
+            user = (
+                user_base
+                + "\n\nVALIDATION ERRORS FROM PREVIOUS ATTEMPT:\n"
+                + "\n".join(f"- {e}" for e in errs)
+                + "\n\nFix ONLY the citations/quotes so that each quote is a literal substring of the cited passage text. "
+                  "Do not add new passages. Return ONLY valid JSON."
+            )
 
-    content = ""
-    try:
-        content = resp["choices"][0]["message"]["content"]
-    except Exception:
-        raise SystemExit("Unexpected LLM response shape; see llm_response_raw.json")
+        payload = dict(payload_base)
+        payload["messages"] = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
 
-    (out_dir / "answer_raw.txt").write_text(content, encoding="utf-8")
+        (out_dir / f"prompt_user_attempt{attempt}.txt").write_text(user, encoding="utf-8")
 
-    try:
-        obj = json.loads(content)
-    except Exception as e:
-        raise SystemExit(f"LLM did not return valid JSON. See answer_raw.txt. Error: {e}")
+        t0 = time.time()
+        resp = _http_json(base + "/chat/completions", payload, api_key=a.llm_api_key, timeout_s=240)
+        dt = time.time() - t0
 
-    errs = validate_answer_obj(obj, allowed_ids)
+        (out_dir / f"llm_response_raw_attempt{attempt}.json").write_text(
+            json.dumps(resp, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+        content = ""
+        try:
+            content = resp["choices"][0]["message"]["content"]
+        except Exception:
+            errs = [f"Unexpected LLM response shape on attempt {attempt}"]
+            continue
+
+        (out_dir / f"answer_raw_attempt{attempt}.txt").write_text(content, encoding="utf-8")
+
+        try:
+            obj = json.loads(content)
+        except Exception as e:
+            errs = [f"LLM did not return valid JSON on attempt {attempt}: {e}"]
+            obj = None
+            continue
+
+        errs = validate_answer_obj(obj, allowed_ids, passages)
+
+        (out_dir / f"validation_attempt{attempt}.json").write_text(
+            json.dumps(
+                {
+                    "generated_utc": utc_iso(),
+                    "ok": (len(errs) == 0),
+                    "errors": errs,
+                    "allowed_ids": sorted(allowed_ids),
+                    "model": model,
+                    "latency_s": dt,
+                    "attempt": attempt,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        if not errs:
+            break
+
     (out_dir / "validation.json").write_text(
         json.dumps(
             {
@@ -358,6 +485,7 @@ def run_answer_db(a: AnswerDbArgs) -> Path:
                 "allowed_ids": sorted(allowed_ids),
                 "model": model,
                 "latency_s": dt,
+                "attempts": attempts,
             },
             ensure_ascii=False,
             indent=2,
@@ -365,9 +493,8 @@ def run_answer_db(a: AnswerDbArgs) -> Path:
         encoding="utf-8",
     )
 
-    if errs:
-        raise SystemExit("answer-db validation failed; see validation.json")
-
+    if errs or obj is None:
+        raise SystemExit("answer-db validation failed; see validation.json and per-attempt files")
     (out_dir / "answer.json").write_text(json.dumps(obj, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
     (out_dir / "meta.json").write_text(
