@@ -1,6 +1,5 @@
 # SCRIPTORIUM — Project Context (Living Document)
-Last updated: 2026-02-23
-
+Last updated: 2026-02-24
 ## Core goal
 Local-first, reproducible pipeline that ingests historical text corpora into a structured SQLite database with:
 - Canonical archival JSONL intermediate
@@ -51,10 +50,10 @@ Long-term scope (planned):
 - python -m scriptorium check-ai-fts --config configs\window_0597_0865.toml --json
 
 ## Next work (priority order)
-1) Standardize segment ID conventions across corpora (so cites always resolve cleanly).
-2) Add “pilot” for TEI/CTS-family ingest (one small Greek or Latin work) with strict provenance/rights.
-3) Add evaluation harness: same query set across local model vs Gemini vs xAI; compare cite-resolvability and bad cites.
-4) Expand catalog + per-corpus ingest stubs systematically.
+1) Commit + CI lock-in for provenance gate (`--strict-provenance`): add pytest coverage and document the invariant.
+2) Scale corpora (repeat the disciplined loop): add one additional Latin TEI corpus using the TEI/CTS module (ingest → register → provenance/rights → strict db-build → FTS smoke).
+3) Optional: add semantic hash (`canon_jsonl.semantic_hash_v1`) to reduce false alarms from harmless byte-level changes.
+4) Optional: Qwen3.5 integration (disable thinking via `extra_body` passthrough) once you decide to switch.
 
 ## Session protocol (prevents token spiral)
 - End of session: update this file’s “milestone reached” and “next work”.
