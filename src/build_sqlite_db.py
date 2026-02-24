@@ -42,27 +42,6 @@ def pick_id(rec: dict[str, Any]) -> str | None:
     return None
 
 
-def norm_segment_id(corpus_id: str, raw_id: str) -> str:
-    """Normalize segments.id to '<corpus_id>:<local_id>'.
-
-    - If raw_id already starts with '{corpus_id}:', keep it.
-    - If raw_id contains some other prefix 'X:tail', keep tail but force correct corpus_id.
-    - Otherwise, prefix corpus_id.
-    """
-    corpus_id = (corpus_id or "").strip()
-    raw_id = (raw_id or "").strip()
-    if not corpus_id or not raw_id:
-        return raw_id
-    pref = corpus_id + ":"
-    if raw_id.startswith(pref):
-        return raw_id
-    if ":" in raw_id:
-        _, tail = raw_id.split(":", 1)
-        tail = tail.strip()
-        if tail:
-            return pref + tail
-    return pref + raw_id
-
 def load_canon_paths_registry_only(root: Path) -> list[dict[str, Any]]:
     """
     Authoritative: docs/corpora.json only.
@@ -135,6 +114,7 @@ def init_db(conn: sqlite3.Connection) -> None:
 def rebuild_segments_fts(conn: sqlite3.Connection) -> None:
     """
     Build segments_fts (FTS5) from segments. Deterministic: drop + recreate each db-build.
+    Tokenizer: unicode61 with remove_diacritics=2 (diacritic-insensitive, Greek/Latin-friendly).
     Column order is fixed with text first to keep snippet()/highlight() column indices stable.
     """
     # Drop old FTS table if present
@@ -148,7 +128,7 @@ def rebuild_segments_fts(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         CREATE VIRTUAL TABLE segments_fts USING fts5(
-          text,
+text,
           corpus_id UNINDEXED,
           work_id UNINDEXED,
           loc UNINDEXED,
@@ -159,9 +139,9 @@ def rebuild_segments_fts(conn: sqlite3.Connection) -> None:
           text_norm UNINDEXED,
           source_refs_json UNINDEXED,
           notes_json UNINDEXED,
-          record_json UNINDEXED
-        );
-        """
+          record_json UNINDEXED,
+          tokenize='unicode61 remove_diacritics 2'
+);"""
     )
 
     conn.execute(
@@ -220,7 +200,6 @@ def main() -> int:
                 if not rid:
                     stats[cid]["skipped_no_id"] += 1
                     continue
-                rid = norm_segment_id(cid, rid)
 
                 text = pick_first_str(rec, TEXT_KEYS) or ""
                 loc = pick_first_str(rec, LOC_KEYS)
@@ -270,21 +249,6 @@ def main() -> int:
         conn.commit()
         print(str(out_path))
         print(f"[OK] corpora={len(corpora)} segments={total}")
-
-        # IDSTAT: verify id convention (should be bad=0 after normalization)
-        rows = conn.execute(
-            """
-            select corpus_id,
-                   sum(case when id like corpus_id || ':%' then 1 else 0 end) as ok_prefixed,
-                   sum(case when id not like corpus_id || ':%' then 1 else 0 end) as bad,
-                   count(*) as total
-            from segments
-            group by corpus_id
-            order by bad desc, total desc
-            """
-        ).fetchall()
-        for r in rows:
-            print(f"[IDSTAT] {r[0]} ok_prefixed={r[1]} bad={r[2]} total={r[3]}")
         for cid in sorted(stats.keys()):
             s = stats[cid]
             print(f"[STAT] {cid}: loaded={s['loaded']} skipped_no_id={s['skipped_no_id']}")

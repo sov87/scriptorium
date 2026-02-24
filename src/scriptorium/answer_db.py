@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import difflib
+import unicodedata
 import os
 import re
 import sqlite3
@@ -148,7 +149,7 @@ def fetch_segments(con: sqlite3.Connection, ids: list[str]) -> list[dict[str, An
         return []
     qmarks = ",".join(["?"] * len(ids))
     rows = con.execute(
-        f"select corpus_id,id,coalesce(work_id,''),coalesce(loc,''),text from segments where id in ({qmarks})",
+        f"select corpus_id,id,coalesce(work_id,''),coalesce(loc,''),coalesce(text,'') from segments where id in ({qmarks})",
         ids,
     ).fetchall()
     by_id = {r[1]: r for r in rows}
@@ -156,6 +157,8 @@ def fetch_segments(con: sqlite3.Connection, ids: list[str]) -> list[dict[str, An
     for rid in ids:
         r = by_id.get(rid)
         if not r:
+            continue
+        if not (r[4] or '').strip():
             continue
         out.append(
             {
@@ -213,6 +216,9 @@ def validate_answer_obj(
     """
     Full scholarly validation: ID must exist + quote must actually appear in the source text.
     Prevents LLM hallucinations on quoted material.
+
+    - Unicode normalization: NFC is applied before substring checks (important for Greek diacritics).
+    - passages are accepted in flexible shapes (id/segment_id, text/text_snip/excerpt).
     """
     errs: list[str] = []
     if not isinstance(obj, dict):
@@ -226,19 +232,25 @@ def validate_answer_obj(
         errs.append("missing/invalid 'citations' (list)")
         cits = []
     else:
-        # Build quick lookup: id -> full text
-        id_to_text = {
-            p["id"]: p["text"]
-            for p in (passages or [])
-            if isinstance(p, dict) and isinstance(p.get("id"), str) and isinstance(p.get("text"), str)
-        }
+        # Build quick lookup: id -> full text (best-effort keys)
+        id_to_text: dict[str, str] = {}
+        for p in (passages or []):
+            if not isinstance(p, dict):
+                continue
+            pid = p.get("id") or p.get("segment_id")
+            ptxt = p.get("text") or p.get("text_snip") or p.get("excerpt") or ""
+            if isinstance(pid, str) and pid and isinstance(ptxt, str) and ptxt:
+                id_to_text[pid] = ptxt
+
+        def _nfc(s: str) -> str:
+            return unicodedata.normalize("NFC", s)
 
         def _norm_ws(s: str) -> str:
             return " ".join(s.split()).strip()
 
         def _best_window_ratio(needle: str, hay: str) -> float:
-            needle = needle.lower()
-            hay = hay.lower()
+            needle = needle.casefold()
+            hay = hay.casefold()
             if not needle or not hay:
                 return 0.0
             n = len(needle)
@@ -288,11 +300,17 @@ def validate_answer_obj(
                 errs.append(f"citations[{i}].id has no source text")
                 continue
 
-            if q in source_text:
+            # NFC normalize before substring checks (Greek diacritics can differ NFC/NFD)
+            q0 = _nfc(q)
+            s0 = _nfc(source_text)
+
+            # Strict substring check
+            if q0 in s0:
                 continue
 
-            qn = _norm_ws(q)
-            sn = _norm_ws(source_text)
+            # Whitespace-normalized substring check
+            qn = _norm_ws(q0)
+            sn = _norm_ws(s0)
             if qn and qn in sn:
                 continue
 
@@ -372,6 +390,24 @@ def run_answer_db(a: AnswerDbArgs) -> Path:
     )
 
     allowed_ids = {p["id"] for p in passages}
+
+    if not passages:
+        (out_dir / "validation.json").write_text(
+            json.dumps(
+                {
+                    "generated_utc": utc_iso(),
+                    "ok": False,
+                    "errors": ["no candidate passages retrieved"],
+                    "allowed_ids": [],
+                    "model": a.llm_model,
+                    "latency_s": 0.0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        raise SystemExit("answer-db: no candidate passages retrieved")
 
     if a.dry_run:
         (out_dir / "answer.json").write_text(

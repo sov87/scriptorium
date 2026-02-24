@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-02-23T00:08:54Z",
+  "generated_utc": "2026-02-24T03:26:33Z",
   "corpora": [
     {
       "corpus_id": "asc_A",
@@ -123,6 +123,27 @@
         "tier": "UNSET",
         "license": "",
         "distributable": false
+      },
+      "bm25": {
+        "path": ""
+      },
+      "faiss": {
+        "index_path": "",
+        "ids_path": "",
+        "meta_path": ""
+      }
+    },
+    {
+      "corpus_id": "grc_tlg0059_tlg001_perseus_grc1",
+      "title": "Plato, Euthyphro (Greek) [canonical-greekLit tlg0059.tlg001.perseus-grc1]",
+      "canon_jsonl": {
+        "path": "data_proc/grc_tlg0059_tlg001_perseus_grc1_prod.jsonl",
+        "sha256": "3794C30DAF2215376B47DD4571A3B7400D898B4D0882FCFBE7D3B6E20E5636DA"
+      },
+      "rights": {
+        "tier": "A_open_license",
+        "license": "CC-BY-SA-4.0 (PerseusDL/canonical-greekLit)",
+        "distributable": true
       },
       "bm25": {
         "path": ""
