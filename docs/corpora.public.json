@@ -4,8 +4,15 @@
     {
       "corpus_id": "oe_bede_sample",
       "title": "Old English Bede (CI sample)",
-      "canon_jsonl": { "path": "sample_data/data_proc/oe_bede_sample_utf8.jsonl" },
-      "rights": { "tier": "A_demo", "license": "Demo sample data", "distributable": true }
+      "canon_jsonl": {
+        "path": "sample_data/data_proc/oe_bede_sample_utf8.jsonl",
+        "sha256": "EC562722C67293F4D8F5085E7567CBFFC8B8841ED1D3BFC3120040DC8ED0A445"
+      },
+      "rights": {
+        "tier": "A_demo",
+        "license": "Demo sample data",
+        "distributable": true
+      }
     }
   ]
 }
