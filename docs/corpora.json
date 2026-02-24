@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-02-24T03:26:33Z",
+  "generated_utc": "2026-02-24T07:21:40Z",
   "corpora": [
     {
       "corpus_id": "asc_A",
@@ -144,6 +144,26 @@
         "tier": "A_open_license",
         "license": "CC-BY-SA-4.0 (PerseusDL/canonical-greekLit)",
         "distributable": true
+      },
+      "bm25": {
+        "path": ""
+      },
+      "faiss": {
+        "index_path": "",
+        "ids_path": "",
+        "meta_path": ""
+      }
+    },
+    {
+      "corpus_id": "lat_stoa0224b_stoa003_opp_lat1",
+      "title": "Latin pilot [OGL csel-dev stoa0224b.stoa003.opp-lat1]",
+      "canon_jsonl": {
+        "path": "data_proc/lat_stoa0224b_stoa003_opp_lat1_prod.jsonl"
+      },
+      "rights": {
+        "tier": "B_local_only",
+        "license": "UNVERIFIED",
+        "distributable": false
       },
       "bm25": {
         "path": ""

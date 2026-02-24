@@ -1,111 +1,62 @@
-﻿from __future__ import annotations
+# File: src/ingest/ingest_echoe_tei.py
+# ECHOE TEI ingest wrapper (updated to respect canonical ID invariant and TEI normalization policy).
+#
+# - Uses lxml + namespace-aware XPath.
+# - Emits canonical JSONL records matching the common shape:
+#     {corpus_id, local_id, id, work_id, loc, text, meta}
+# - segments.id invariant: id == f"{corpus_id}:{local_id}" (exactly one colon)
+# - Never silently drops <choice>/<unclear>/<gap>/<supplied>; relies on scriptorium.ingest.tei_cts normalization.
+
+from __future__ import annotations
 
 import argparse
 import hashlib
 import json
-import re
-import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Dict, List, Optional
 
-XML_NS = "http://www.w3.org/XML/1998/namespace"
+from lxml import etree as ET
 
+from scriptorium.ingest.tei_cts import (
+    NS,
+    XML_NS,
+    normalize_node_to_text,
+    parse_tei,
+    parse_work_id,
+    sanitize_local_id_from_loc,
+)
 
-def sha256_file(p: Path) -> str:
+def _minijson(obj) -> str:
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+
+def _sha256_file(p: Path) -> str:
     h = hashlib.sha256()
     with p.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
 
+def _find_body(root: ET._Element) -> Optional[ET._Element]:
+    bodies = root.xpath(".//tei:text/tei:body", namespaces=NS)
+    if bodies:
+        return bodies[0]
+    bodies = root.xpath(".//tei:body", namespaces=NS)
+    return bodies[0] if bodies else None
 
-def strip_ns(tag: str) -> str:
-    return tag.split("}", 1)[1] if tag.startswith("{") and "}" in tag else tag
-
-
-def detect_tei_ns(root_el: ET.Element) -> str | None:
-    # default namespace appears as {uri}TEI
-    if root_el.tag.startswith("{") and "}" in root_el.tag:
-        return root_el.tag.split("}", 1)[0][1:]
-    return None
-
-
-def norm_ws(s: str) -> str:
-    s = s.replace("\r\n", "\n").replace("\r", "\n")
-    s = re.sub(r"[ \t]+", " ", s)
-    s = re.sub(r"\n{3,}", "\n\n", s)
-    return s.strip()
-
-
-def extract_text_with_breaks(elem: ET.Element) -> str:
-    parts: list[str] = []
-
-    def walk(e: ET.Element) -> None:
-        name = strip_ns(e.tag)
-        if name in ("lb", "pb", "cb"):
-            parts.append("\n")
-
-        if e.text:
-            parts.append(e.text)
-
-        for ch in list(e):
-            walk(ch)
-            if ch.tail:
-                parts.append(ch.tail)
-
-    walk(elem)
-    return norm_ws("".join(parts))
-
-
-def iter_by_localname(root: ET.Element, local: str) -> Iterable[ET.Element]:
-    for e in root.iter():
-        if strip_ns(e.tag) == local:
-            yield e
-
-
-def find_first_body(root_el: ET.Element, tei_ns: str | None) -> Optional[ET.Element]:
-    # Try namespaced path first if we have a namespace
-    if tei_ns:
-        ns = {"tei": tei_ns}
-        body = root_el.find(".//tei:text/tei:body", ns)
-        if body is not None:
-            return body
-        body = root_el.find(".//tei:body", ns)
-        if body is not None:
-            return body
-
-    # Fallback: no-namespace paths
-    body = root_el.find(".//text/body")
-    if body is not None:
-        return body
-    body = root_el.find(".//body")
-    if body is not None:
-        return body
-
-    # Last resort: any element with localname 'body'
-    for b in iter_by_localname(root_el, "body"):
-        return b
-    return None
-
-
-def pick_blocks(body: ET.Element) -> list[ET.Element]:
-    # Prefer common TEI block carriers in order
-    # (Many TEI corpora use <ab> or <l>/<lg> rather than <p>.)
-    blocks: list[ET.Element] = []
+def _pick_blocks(body: ET._Element) -> List[ET._Element]:
+    # Prefer common TEI block carriers in order (deterministic).
     for name in ("p", "ab", "lg", "l", "head", "seg"):
-        blocks = [e for e in body.iter() if strip_ns(e.tag) == name]
-        if blocks:
-            return blocks
-
-    # If nothing matched, treat the whole body as one block
+        els = body.xpath(f".//tei:{name}", namespaces=NS)
+        if els:
+            return list(els)
     return [body]
-
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", required=True)
     ap.add_argument("--in-dir", required=True, help="Directory containing ECHOE TEI XML files")
-    ap.add_argument("--out", required=True, help="Output canon JSONL path")
+    ap.add_argument("--out", required=True, help="Output canonical JSONL path")
+    ap.add_argument("--with-sha256", action="store_true", help="Include per-file sha256 in meta (deterministic but slower)")
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -132,72 +83,77 @@ def main() -> int:
         except Exception:
             return p.as_posix()
 
-    written = 0
     seen: set[str] = set()
+    written = 0
 
     with out_path.open("w", encoding="utf-8", newline="\n") as out:
         for fp in xml_files:
             try:
-                tree = ET.parse(fp)
+                tree = parse_tei(str(fp))
             except Exception:
                 continue
 
             root_el = tree.getroot()
-            tei_ns = detect_tei_ns(root_el)
-
-            body = find_first_body(root_el, tei_ns)
+            body = _find_body(root_el)
             if body is None:
                 continue
 
-            doc = fp.stem
-            file_sha = sha256_file(fp)
-            src_rel = rel_to_root(fp)
+            # work_id: prefer CTS URN if present; else filename stem
+            work_id = parse_work_id(tree) or fp.stem
 
-            tei_id = root_el.get(f"{{{XML_NS}}}id")
+            src_meta: Dict[str, Any] = {
+                "path": rel_to_root(fp),
+            }
+            if args.with_sha256:
+                src_meta["sha256"] = _sha256_file(fp)
 
-            blocks = pick_blocks(body)
+            tei_xml_id = root_el.get(f"{{{XML_NS}}}id")
 
-            idx = 0
-            for b in blocks:
-                txt = extract_text_with_breaks(b)
+            blocks = _pick_blocks(body)
+
+            for idx, b in enumerate(blocks, start=1):
+                txt, tei_meta = normalize_node_to_text(b)
                 if not txt:
                     continue
-                idx += 1
 
-                b_xml_id = b.get(f"{{{XML_NS}}}id")
-                rid = f"echoe_tei:{doc}:{idx:05d}"
+                loc = f"{fp.relative_to(in_dir).as_posix()}#b{idx:05d}"
+                local_id = sanitize_local_id_from_loc(loc)
+                if not local_id:
+                    local_id = f"{fp.stem}_{idx:05d}"
+
+                corpus_id = "echoe_tei"
+                rid = f"{corpus_id}:{local_id}"
                 if rid in seen:
                     raise SystemExit(f"duplicate id: {rid}")
                 seen.add(rid)
 
-                rec: dict[str, Any] = {
-                    "id": rid,
-                    "corpus_id": "echoe_tei",
-                    "work_id": doc,
-                    "witness_id": tei_id or doc,
-                    "edition_id": "ECHOEProject/echoe:xml",
-                    "loc": f"{fp.relative_to(in_dir).as_posix()}#b{idx}",
+                b_xml_id = b.get(f"{{{XML_NS}}}id")
+                meta: Dict[str, Any] = {
                     "lang": "ang",
+                    "witness_id": tei_xml_id or fp.stem,
+                    "edition_id": "ECHOEProject/echoe:xml",
+                    "source": src_meta,
+                    "offset": {"block": idx, "xml_id": b_xml_id, "tag": ET.QName(b).localname},
+                }
+                # merge TEI policy metadata (choices/unclear/supplied/gaps)
+                meta.update(tei_meta)
+
+                rec = {
+                    "corpus_id": corpus_id,
+                    "local_id": local_id,
+                    "id": rid,
+                    "work_id": work_id,
+                    "loc": loc,
                     "text": txt,
-                    "text_norm": None,
-                    "source_refs": [
-                        {
-                            "type": "file",
-                            "path": src_rel,
-                            "sha256": file_sha,
-                            "offset": {"block": idx, "xml_id": b_xml_id, "tag": strip_ns(b.tag)},
-                        }
-                    ],
-                    "notes": [],
+                    "meta": meta,
                 }
 
-                out.write(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n")
+                out.write(_minijson(rec) + "\n")
                 written += 1
 
     print(str(out_path))
     print(f"[OK] files={len(xml_files)} records={written}")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

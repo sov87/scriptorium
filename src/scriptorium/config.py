@@ -65,9 +65,23 @@ def _resolve_under(root: Path, p: str | Path) -> Path:
 
 def load_config(path: str | Path) -> Config:
     path = Path(path)
-    raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    raw = tomllib.loads(path.read_text(encoding="utf-8-sig"))
 
     project_root = Path(_req(raw, "root", "project_root"))
+
+    # db_path: allow root.db_path in TOML; resolve relative to project_root
+
+    db_path_raw = (raw.get("root", {}) or {}).get("db_path", "db/scriptorium.sqlite")
+
+    db_path = Path(str(db_path_raw))
+
+    if not db_path.is_absolute():
+
+        db_path = (project_root / db_path).resolve()
+
+    else:
+
+        db_path = db_path.resolve()
     window = str(_req(raw, "window", "name"))
     tag = str(_req(raw, "window", "tag"))
 
@@ -77,7 +91,7 @@ def load_config(path: str | Path) -> Config:
     release_ps1 = _get(raw, r"src\release_window.ps1", "ps", "release_window_ps1")
     release_ps1 = _resolve_under(project_root, release_ps1)
 
-    db_path_rel = _get(raw, "db/scriptorium.sqlite", "root", "db_path")
+    db_path_rel = _get(raw, "", "root", "db_path") or _get(raw, "db/scriptorium.sqlite", "indexes", "db_path")
     db_path = _resolve_under(project_root, db_path_rel)
 
     bm25_rel = _get(raw, r"indexes\bm25\oe_bede_prod_utf8.pkl", "indexes", "bm25")

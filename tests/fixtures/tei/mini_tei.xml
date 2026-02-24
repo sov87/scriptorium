@@ -1,0 +1,18 @@
+<TEI xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title>Mini TEI Fixture</title></titleStmt>
+      <publicationStmt><p>Test fixture</p></publicationStmt>
+      <sourceDesc><p>None</p></sourceDesc>
+    </fileDesc>
+    <encodingDesc><p>Test</p></encodingDesc>
+    <idno type="CTS-URN">urn:cts:latinLit:phi0959.phi006.perseus-lat2</idno>
+  </teiHeader>
+  <text>
+    <body>
+      <div n="1">
+        <p n="1">Salve <choice><orig>honos</orig><reg>honor</reg></choice>           <unclear reason="illegible" cert="low">abc</unclear>           <supplied reason="lost">def</supplied>           <gap reason="lost" extent="3" unit="chars"/>.</p>
+      </div>
+    </body>
+  </text>
+</TEI>
