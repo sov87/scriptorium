@@ -50,22 +50,31 @@ jobs:
 
           con = sqlite3.connect(str(db))
           try:
-              row = con.execute(
-                  "select id, text from segments where corpus_id=? and text is not null and length(text) >= 120 limit 1",
-                  ("oe_bede_sample",),
-              ).fetchone()
+              row = None
+              # CI sample corpora can be very small; choose the longest available segment text.
+              for min_len in (200, 120, 80, 60, 40, 25):
+                  row = con.execute(
+                      "select id, text from segments where corpus_id=? and text is not null and length(text) >= ? order by length(text) desc limit 1",
+                      ("oe_bede_sample", min_len),
+                  ).fetchone()
+                  if row:
+                      break
           finally:
               con.close()
 
           if not row:
-              raise SystemExit("CI validator seed failed: no suitable segment text for oe_bede_sample")
+              raise SystemExit("CI validator seed failed: no segment text found for oe_bede_sample")
 
           sid, text = row
           text = text or ''
           passages = [{'id': sid, 'text': text}]
           allowed_ids = {sid}
 
-          good_quote = ' '.join(text[:120].split())
+          # Take a real substring from the passage and normalize whitespace; must satisfy min quote length in validator.
+          good_quote = ' '.join(text[: min(200, len(text))].split())
+          if len(good_quote) < 20:
+              raise SystemExit("CI validator seed failed: segment text too short after normalization")
+
           obj_good = {'answer': 'x', 'citations': [{'id': sid, 'quote': good_quote}], 'notes': []}
           errs_good = validate_answer_obj(obj_good, allowed_ids, passages)
           if errs_good:
