@@ -5,7 +5,8 @@
       "corpus_id": "asc_A",
       "title": "Anglo-Saxon Chronicle, MS A (canon)",
       "canon_jsonl": {
-        "path": "data_proc/asc_A_prod_v2.jsonl"
+        "path": "data_proc/asc_A_prod_v2.jsonl",
+        "sha256": "35567D63AFB8293A9C7920183D64B8A1D8E8A3AB9E7AAA2C508A8E6AE64C6D54"
       },
       "rights": {
         "tier": "B_local_only",
@@ -17,7 +18,8 @@
       "corpus_id": "oe_bede",
       "title": "Old English Bede (canon)",
       "canon_jsonl": {
-        "path": "data_proc/oe_bede_prod.jsonl"
+        "path": "data_proc/oe_bede_prod.jsonl",
+        "sha256": "B3E3684F548F0A6C1296DFA793F6B4364A0D641C5F7A2D1BA8D89455915DF79F"
       },
       "rights": {
         "tier": "B_local_only",
@@ -29,7 +31,8 @@
       "corpus_id": "oe_beowulf_9700",
       "title": "Beowulf (Old English) [Project Gutenberg #9700]",
       "canon_jsonl": {
-        "path": "data_proc/oe_beowulf_9700_prod.jsonl"
+        "path": "data_proc/oe_beowulf_9700_prod.jsonl",
+        "sha256": "41E580BFBBCC59D94316C6E090613FC39127448BFD231A7666B9E6CBBB47F8A9"
       },
       "rights": {
         "tier": "A_open_terms",
@@ -41,7 +44,8 @@
       "corpus_id": "echoe",
       "title": "ECHOE (plaintext ingest)",
       "canon_jsonl": {
-        "path": "data_proc/echoe_prod.jsonl"
+        "path": "data_proc/echoe_prod.jsonl",
+        "sha256": "3C179DF898229B893E2FF68E1416982A65643EA24D835DA6D6F1BE9DD66ED862"
       },
       "rights": {
         "tier": "A_open_license",
@@ -53,7 +57,8 @@
       "corpus_id": "echoe_tei",
       "title": "ECHOE (TEI XML ingest)",
       "canon_jsonl": {
-        "path": "data_proc/echoe_tei_prod.jsonl"
+        "path": "data_proc/echoe_tei_prod.jsonl",
+        "sha256": "71CDB086A9CF78DC02B6C38305C5C4B17029F87770E7A4C42BFAA754FB34C67C"
       },
       "rights": {
         "tier": "A_open_license",
@@ -65,7 +70,8 @@
       "corpus_id": "gutenberg_demo_oe",
       "title": "Gutenberg demo OE (plaintext ingest)",
       "canon_jsonl": {
-        "path": "data_proc/gutenberg_demo_oe_prod.jsonl"
+        "path": "data_proc/gutenberg_demo_oe_prod.jsonl",
+        "sha256": "E037DCA9D9AADC2B32BFE337B82C64D869AA520D0089847E6FE8F7580F05EA5F"
       },
       "rights": {
         "tier": "A_open_terms",
@@ -77,7 +83,8 @@
       "corpus_id": "oe_physio_14529",
       "title": "The Old English Physiologus (PG #14529)",
       "canon_jsonl": {
-        "path": "data_proc/oe_physio_14529_prod.jsonl"
+        "path": "data_proc/oe_physio_14529_prod.jsonl",
+        "sha256": "BA4E662616F3423F2D48446BD8E9D05ABA1F60D307A9A27BAA0539C2C8B12037"
       },
       "rights": {
         "tier": "UNSET",
@@ -97,7 +104,8 @@
       "corpus_id": "oe_beowulf_9701",
       "title": "Beowulf + Finnsburh (PG #9701)",
       "canon_jsonl": {
-        "path": "data_proc/oe_beowulf_9701_prod.jsonl"
+        "path": "data_proc/oe_beowulf_9701_prod.jsonl",
+        "sha256": "9D04E0603E7D3DB09FE72CC334EB381006822850C6346A61EEFD836D07BDA519"
       },
       "rights": {
         "tier": "UNSET",
@@ -117,7 +125,8 @@
       "corpus_id": "oe_aelfric_45861",
       "title": "Ælfrics Grammatik und Glossar (PG #45861)",
       "canon_jsonl": {
-        "path": "data_proc/oe_aelfric_45861_prod.jsonl"
+        "path": "data_proc/oe_aelfric_45861_prod.jsonl",
+        "sha256": "5107D19FB9B083E798BA33B0C596FFE9F6CDB517EC58897FBA0393CCD956F619"
       },
       "rights": {
         "tier": "UNSET",
@@ -158,7 +167,8 @@
       "corpus_id": "lat_stoa0224b_stoa003_opp_lat1",
       "title": "Latin pilot [OGL csel-dev stoa0224b.stoa003.opp-lat1]",
       "canon_jsonl": {
-        "path": "data_proc/lat_stoa0224b_stoa003_opp_lat1_prod.jsonl"
+        "path": "data_proc/lat_stoa0224b_stoa003_opp_lat1_prod.jsonl",
+        "sha256": "8C6FDC577AC3FE568C420BA1EA68C6DE7ABC17FB1C0B5609EDA7FEFAA8035FBC"
       },
       "rights": {
         "tier": "B_local_only",

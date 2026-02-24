@@ -67,6 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_db.add_argument("--config", required=True)
     p_db.add_argument("--out", default="db/scriptorium.sqlite")
     p_db.add_argument("--overwrite", action="store_true")
+    p_db.add_argument("--strict-provenance", action="store_true", help="Fail if any recorded canon_jsonl sha256 mismatches the on-disk JSONL (and, with this flag, also fail if a corpus with a canon_jsonl.path lacks sha256).")
 
     p_ds = sub.add_parser("db-search")
     p_ds.add_argument("--config", required=True)
@@ -264,6 +265,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if (args.strict and warnings) else 0
 
     if args.cmd == "db-build":
+        # Provenance gate: verify recorded canon_jsonl SHA256 before building DB
+        from .provenance import verify_canon_jsonl_sha256
+        verify_canon_jsonl_sha256(cfg.project_root, strict=bool(getattr(args, "strict_provenance", False)))
         script = cfg.project_root / "src" / "build_sqlite_db.py"
         out_arg = args.out
         if out_arg == "db/scriptorium.sqlite":
