@@ -1,6 +1,11 @@
 # File: src/ingest/harvest_capitains_repo.py
-# Purpose: harvest Capitains-style TEI repos (canonical-greekLit / canonical-latinLit) into canonical JSONL
-#          and optionally upsert docs/corpora.json. Designed for large harvests with fail-closed provenance.
+# Purpose: Harvest Capitains-style TEI repos (canonical-greekLit / canonical-latinLit) into canonical JSONL
+#          and optionally upsert docs/corpora.json.
+#
+# Safety invariants:
+# - Default is FAIL-SAFE: does not overwrite existing out_jsonl unless --overwrite is set.
+# - Can continue past bad TEI files with --continue-on-error (records errors in report).
+# - Can harvest without touching registry with --no-upsert (records items in report).
 
 from __future__ import annotations
 
@@ -137,6 +142,7 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--no-upsert", action="store_true", help="Harvest JSONL + report but do not modify registry")
     ap.add_argument("--continue-on-error", action="store_true", help="Skip TEI files that fail ingest; record error in report")
+    ap.add_argument("--overwrite", action="store_true", help="Overwrite existing out_jsonl (default: skip existing)")
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -171,6 +177,7 @@ def main() -> int:
 
     items: List[HarvestItem] = []
     errors: List[Dict[str, str]] = []
+    skipped: List[Dict[str, str]] = []
 
     prefix = _safe_id(str(args.prefix).strip())
     if not prefix:
@@ -186,6 +193,10 @@ def main() -> int:
 
         if args.dry_run:
             print("[DRY]", tei.as_posix(), "->", out_path.as_posix())
+            continue
+
+        if out_path.exists() and not args.overwrite:
+            skipped.append({"tei": tei.as_posix(), "out_jsonl": out_path.as_posix(), "reason": "exists"})
             continue
 
         try:
@@ -228,6 +239,7 @@ def main() -> int:
         "repo_root": str(repo_abs),
         "base": str(base),
         "count": len(items),
+        "skipped": skipped,
         "errors": errors,
         "items": [
             {
