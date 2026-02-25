@@ -27,6 +27,18 @@
       "title": "Beowulf (manual source placeholder)"
     },
     {
+      "source_id": "dmetola_old_english_oedt",
+      "type": "git",
+      "repo": "https://github.com/dmetola/Old_English-OEDT.git",
+      "url": "",
+      "dest": "data_raw/_repos/Old_English-OEDT",
+      "ref": "",
+      "license": "CC-BY-SA-4.0",
+      "distributable": true,
+      "notes": "Old English UD treebank (OEDT). See repo README for provenance and split details.",
+      "title": "Old English OEDT (UD CoNLL-U)"
+    },
+    {
       "source_id": "echoe_repo",
       "type": "git",
       "repo": "https://github.com/ECHOEProject/echoe.git",
@@ -288,6 +300,30 @@
       ],
       "outputs": [
         "data_proc/oe_beowulf_9701_prod.jsonl"
+      ]
+    },
+    {
+      "corpus_id": "oe_oedt_ud",
+      "source_id": "dmetola_old_english_oedt",
+      "enabled": true,
+      "cmd": [
+        "{python}",
+        "src/ingest/ingest_conllu.py",
+        "--root",
+        "{root}",
+        "--in",
+        "data_raw/_repos/Old_English-OEDT",
+        "--glob",
+        "ang_oedt-ud-*.conllu",
+        "--corpus-id",
+        "oe_oedt_ud",
+        "--out",
+        "data_proc/oe_oedt_ud_prod.jsonl",
+        "--lang",
+        "ang"
+      ],
+      "outputs": [
+        "data_proc/oe_oedt_ud_prod.jsonl"
       ]
     },
     {
