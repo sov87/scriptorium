@@ -6,6 +6,15 @@
 
 from __future__ import annotations
 
+
+import sys as _sys
+from pathlib import Path as _Path
+_SRC_ROOT = _Path(__file__).resolve().parents[1]  # .../src
+if str(_SRC_ROOT) not in _sys.path:
+    _sys.path.insert(0, str(_SRC_ROOT))
+del _Path, _SRC_ROOT, _sys
+
+
 import argparse
 import json
 import re
