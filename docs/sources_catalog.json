@@ -1,6 +1,6 @@
 {
   "schema": "scriptorium.sources_catalog.v1",
-  "generated_utc": "2026-02-23T05:20:39Z",
+  "generated_utc": "2026-02-24T00:00:00Z",
   "sources": [
     {
       "source_id": "asc_A_manual",
@@ -30,6 +30,7 @@
       "source_id": "echoe_repo",
       "type": "git",
       "repo": "https://github.com/ECHOEProject/echoe.git",
+      "url": "",
       "dest": "data_raw/echoe_repo",
       "ref": "",
       "license": "GPL-3.0",
@@ -40,6 +41,7 @@
     {
       "source_id": "gutenberg_demo_oe",
       "type": "http",
+      "repo": "",
       "url": "https://www.gutenberg.org/cache/epub/9700/pg9700.txt",
       "dest": "data_raw/gutenberg_demo_oe/pg.txt",
       "ref": "",
@@ -63,6 +65,7 @@
     {
       "source_id": "pg_14529_physio",
       "type": "http",
+      "repo": "",
       "url": "https://www.gutenberg.org/ebooks/14529.txt.utf-8",
       "dest": "data_raw/pg_14529_physio/pg14529.txt",
       "ref": "",
@@ -74,6 +77,7 @@
     {
       "source_id": "pg_45861_aelfric_grammar",
       "type": "http",
+      "repo": "",
       "url": "https://www.gutenberg.org/ebooks/45861.txt.utf-8",
       "dest": "data_raw/pg_45861_aelfric_grammar/pg45861.txt",
       "ref": "",
@@ -85,6 +89,7 @@
     {
       "source_id": "pg_9701_beowulf",
       "type": "http",
+      "repo": "",
       "url": "https://www.gutenberg.org/ebooks/9701.txt.utf-8",
       "dest": "data_raw/pg_9701_beowulf/pg9701.txt",
       "ref": "",
@@ -92,6 +97,18 @@
       "distributable": true,
       "notes": "PG #9701: Beowulf + Finnsburh fragment (Plain Text UTF-8)",
       "title": "Beowulf (Project Gutenberg #9701, plain text UTF-8)"
+    },
+    {
+      "source_id": "perseus_canonical_greekLit",
+      "type": "git",
+      "repo": "https://github.com/PerseusDL/canonical-greekLit.git",
+      "url": "",
+      "dest": "data_raw/_repos/canonical-greekLit",
+      "ref": "",
+      "license": "CC-BY-SA-4.0",
+      "distributable": true,
+      "notes": "PerseusDL canonical-greekLit (Capitains TEI + CTS).",
+      "title": "PerseusDL canonical-greekLit"
     }
   ],
   "ingests": [
@@ -219,6 +236,36 @@
       "outputs": [
         "data_proc/oe_physio_14529_prod.jsonl"
       ]
+    },
+    {
+      "corpus_id": "harvest_canonical_greekLit",
+      "source_id": "perseus_canonical_greekLit",
+      "enabled": true,
+      "cmd": [
+        "{python}",
+        "src/ingest/harvest_capitains_repo.py",
+        "--root",
+        "{root}",
+        "--repo-root",
+        "data_raw/_repos/canonical-greekLit",
+        "--out-dir",
+        "data_proc",
+        "--registry",
+        "docs/corpora.json",
+        "--prefix",
+        "grc",
+        "--lang",
+        "grc",
+        "--license",
+        "CC-BY-SA-4.0 (PerseusDL/canonical-greekLit)",
+        "--tier",
+        "A_open_license",
+        "--distributable",
+        "1",
+        "--limit",
+        "1"
+      ],
+      "outputs": []
     }
   ]
 }
