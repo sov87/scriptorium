@@ -133,6 +133,18 @@
       "distributable": true,
       "notes": "PG #9701: Beowulf + Finnsburh fragment (Plain Text UTF-8)",
       "title": "Beowulf (Project Gutenberg #9701, plain text UTF-8)"
+    },
+    {
+      "source_id": "ud_old_english_cairo",
+      "type": "git",
+      "repo": "https://github.com/UniversalDependencies/UD_Old_English-Cairo.git",
+      "url": "",
+      "dest": "data_raw/_repos/UD_Old_English-Cairo",
+      "ref": "",
+      "license": "CC-BY-SA-4.0",
+      "distributable": true,
+      "notes": "Universal Dependencies: UD_Old_English-Cairo (grammar examples; small).",
+      "title": "UD Old English Cairo (CoNLL-U)"
     }
   ],
   "ingests": [
@@ -347,6 +359,30 @@
       ],
       "outputs": [
         "data_proc/oe_physio_14529_prod.jsonl"
+      ]
+    },
+    {
+      "corpus_id": "oe_ud_cairo",
+      "source_id": "ud_old_english_cairo",
+      "enabled": true,
+      "cmd": [
+        "{python}",
+        "src/ingest/ingest_conllu.py",
+        "--root",
+        "{root}",
+        "--in",
+        "data_raw/_repos/UD_Old_English-Cairo",
+        "--glob",
+        "ang_cairo-ud-*.conllu",
+        "--corpus-id",
+        "oe_ud_cairo",
+        "--out",
+        "data_proc/oe_ud_cairo_prod.jsonl",
+        "--lang",
+        "ang"
+      ],
+      "outputs": [
+        "data_proc/oe_ud_cairo_prod.jsonl"
       ]
     }
   ]
