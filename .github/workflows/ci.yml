@@ -37,7 +37,7 @@ jobs:
       - name: Doctor (strict) + build + smoke
         run: |
           python -m scriptorium doctor --config configs/sample_demo_ci_strict.toml --strict --json
-          python -m scriptorium db-build --config configs/sample_demo_ci_strict.toml --overwrite
+          python -m scriptorium db-build --config configs/sample_demo_ci_strict.toml --overwrite --strict-provenance --strict-rights
 
           # Validator smoke: quote must be real (no hallucinated quotes)
           python - << 'PY'
