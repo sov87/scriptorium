@@ -11,6 +11,7 @@ from typing import Any
 
 from .config import load_config
 from .ps_bridge import format_release_window_cmd, run_release_window
+from .validate_provenance import validate_all_corpora
 
 
 def _utc_stamp() -> str:
@@ -68,6 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_db.add_argument("--out", default="db/scriptorium.sqlite")
     p_db.add_argument("--overwrite", action="store_true")
     p_db.add_argument("--strict-provenance", action="store_true", help="Fail if any recorded canon_jsonl sha256 mismatches the on-disk JSONL (and, with this flag, also fail if a corpus with a canon_jsonl.path lacks sha256).")
+    p_db.add_argument("--strict-rights", action="store_true", help="Fail closed on rights/provenance completeness for the registry used by db-build (public registry for sample CI; docs/corpora.json otherwise).")
 
     p_ds = sub.add_parser("db-search")
     p_ds.add_argument("--config", required=True)
@@ -266,6 +268,26 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "db-build":
         # Provenance gate: verify recorded canon_jsonl SHA256 before building DB
+        # Rights/provenance completeness gate (separate from sha256 integrity gate).
+        if bool(getattr(args, "strict_rights", False)):
+            from pathlib import Path as _Path
+            reg_override = (
+                getattr(cfg, "corpora_registry", None)
+                or getattr(cfg, "corpora_registry_path", None)
+                or getattr(cfg, "corpora_json", None)
+            )
+            if reg_override:
+                reg_path = (cfg.project_root / str(reg_override)).resolve()
+            else:
+                cfg_name = _Path(str(args.config)).name.lower()
+                if ("sample_demo_ci" in cfg_name) or cfg_name.startswith("sample_") or (str(getattr(cfg, "tag", "")).upper() == "CI"):
+                    pub = (cfg.project_root / "docs" / "corpora.public.json")
+                    reg_path = pub if pub.exists() else (cfg.project_root / "docs" / "corpora.json")
+                else:
+                    reg_path = (cfg.project_root / "docs" / "corpora.json")
+            validate_all_corpora(cfg.project_root, registry_path=reg_path)
+            del _Path
+
         from .provenance import verify_canon_jsonl_sha256
         verify_canon_jsonl_sha256(cfg.project_root, strict=bool(getattr(args, "strict_provenance", False)))
         script = cfg.project_root / "src" / "build_sqlite_db.py"

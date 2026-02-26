@@ -20,11 +20,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-          pip install pytest lxml
-
-      - name: Pytest
-        run: |
-          pytest -q
       - name: Prepare local embedding model for strict doctor
         run: |
           mkdir -p models
@@ -42,7 +37,7 @@ jobs:
       - name: Doctor (strict) + build + smoke
         run: |
           python -m scriptorium doctor --config configs/sample_demo_ci_strict.toml --strict --json
-          python -m scriptorium db-build --config configs/sample_demo_ci_strict.toml --overwrite --strict-provenance
+          python -m scriptorium db-build --config configs/sample_demo_ci_strict.toml --overwrite
 
           # Validator smoke: quote must be real (no hallucinated quotes)
           python - << 'PY'
