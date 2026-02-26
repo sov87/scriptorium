@@ -1,1 +1,123 @@
-{"corpus_id":"oe_beowulf_9700","title":"Beowulf (Old English) [Project Gutenberg #9700 plain text UTF-8]","rights":{"status":"project_gutenberg_license","jurisdiction":"US","notes":"Distributed by Project Gutenberg. Verify public-domain status of underlying text/transcription in your jurisdiction; keep source file and URL for audit."},"sources":[{"label":"primary_raw","provider":"Project Gutenberg","retrieved_utc":"2026-02-21T16:43:23Z","original_url":"https://www.gutenberg.org/ebooks/9700.txt.utf-8","local_path":"data_raw/oe_beowulf_9700/pg9700.txt.utf-8","sha256":"3C12695D05EF20D5CD4BD51FA23CD6DCCEDD39BFDFCF55A852C05A45275537C7","content_notes":"Plain text UTF-8 file as downloaded; boilerplate stripped by ingest script."}],"processing":[{"step":"ingest","script":"src/ingest/ingest_gutenberg_beowulf_9700.py","run_utc":"2026-02-21T17:03:41Z","inputs":[{"path":"data_raw/oe_beowulf_9700/pg9700.txt.utf-8","sha256":"3C12695D05EF20D5CD4BD51FA23CD6DCCEDD39BFDFCF55A852C05A45275537C7"},{"path":"src/ingest/ingest_gutenberg_beowulf_9700.py","sha256":"D8A3C11402A1BCCD95106A5A3AF5704E65C5CEDB02A2E18A6C261D019EBE3DCA"}],"outputs":[{"path":"data_proc/oe_beowulf_9700_prod.jsonl","sha256":"41E580BFBBCC59D94316C6E090613FC39127448BFD231A7666B9E6CBBB47F8A9","record_count":656}],"params":{"corpus_id":"oe_beowulf_9700","lines_per_record":5,"start_regex":"(?im)^\\s*Hwät!","end_regex":"(?im)^\\s*LIST OF NAMES;\\s*NOTES;\\s*AND\\s*GLOSSARY\\.\\s*$"},"runtime":{"python":"3.12.x","platform":"Windows-11","output_written_utc":"2026-02-21T17:03:41Z"}},{"step":"build_faiss","script":"src/build_vec_bede_faiss.py","run_utc":"2026-02-21T17:29:46Z","inputs":[{"path":"data_proc/oe_beowulf_9700_prod.jsonl","sha256":"41E580BFBBCC59D94316C6E090613FC39127448BFD231A7666B9E6CBBB47F8A9"},{"path":"src/build_vec_bede_faiss.py","sha256":"67B8FE31AF307046F826BE7514073F48BA456616C635304DCC00ADFD407CB095"}],"outputs":[{"path":"indexes/vec_faiss/oe_beowulf_9700.index","sha256":"6BDC6ECF9C8DEC3E92E5C553EEBB7B4D40DF27179BE69AB2C517DDE3D2729D1F","record_count":656},{"path":"indexes/vec_faiss/oe_beowulf_9700_ids.json","sha256":"817EC06F99C7E2075354CC0E472AC1BC48B57A9A1A609A48B554BE61EC805E6F","record_count":656},{"path":"indexes/vec_faiss/oe_beowulf_9700_meta.jsonl","sha256":"D2E0614AD52ED226B3EBE7AE3356E7A93C1AAAE2094509AF16A4F520EAC6978C","record_count":656}],"params":{"corpus_id":"oe_beowulf_9700","vec_dir":"indexes/vec_faiss"},"runtime":{"python":"3.12.x","platform":"Windows-11"}},{"step":"build_bm25","script":"src/build_bm25_utf8.py","run_utc":"2026-02-21T17:39:47Z","inputs":[{"path":"data_proc/oe_beowulf_9700_prod.jsonl","sha256":"41E580BFBBCC59D94316C6E090613FC39127448BFD231A7666B9E6CBBB47F8A9"},{"path":"src/build_bm25_utf8.py","sha256":"AF51C873517045954B1B41A2545D1CC9295685BE2A95A923A0FEFCEEF3F6D8A3"}],"outputs":[{"path":"indexes/bm25/oe_beowulf_9700_utf8.pkl","sha256":"97C55F90ED033230661D7B3D0FD7889303CD953E643F4AD5D53442104CA20954","record_count":656}],"params":{"corpus_id":"oe_beowulf_9700","bm25_dir":"indexes/bm25"},"runtime":{"python":"3.12.x","platform":"Windows-11"}}]}
+{
+  "corpus_id": "oe_beowulf_9700",
+  "title": "Beowulf (Old English) [Project Gutenberg #9700 plain text UTF-8]",
+  "rights": {
+    "status": "project_gutenberg_license",
+    "jurisdiction": "US",
+    "notes": "Distributed by Project Gutenberg. Verify public-domain status of underlying text/transcription in your jurisdiction; keep source file and URL for audit.",
+    "distributable": true,
+    "tier": "A_open_terms",
+    "license": "Project Gutenberg License"
+  },
+  "sources": [
+    {
+      "url": "https://www.gutenberg.org/ebooks/9700",
+      "citation": "Project Gutenberg ebook page for oe_beowulf_9700."
+    }
+  ],
+  "processing": [
+    {
+      "step": "ingest",
+      "script": "src/ingest/ingest_gutenberg_beowulf_9700.py",
+      "run_utc": "2026-02-21T17:03:41Z",
+      "inputs": [
+        {
+          "path": "data_raw/oe_beowulf_9700/pg9700.txt.utf-8",
+          "sha256": "3C12695D05EF20D5CD4BD51FA23CD6DCCEDD39BFDFCF55A852C05A45275537C7"
+        },
+        {
+          "path": "src/ingest/ingest_gutenberg_beowulf_9700.py",
+          "sha256": "D8A3C11402A1BCCD95106A5A3AF5704E65C5CEDB02A2E18A6C261D019EBE3DCA"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "data_proc/oe_beowulf_9700_prod.jsonl",
+          "sha256": "41E580BFBBCC59D94316C6E090613FC39127448BFD231A7666B9E6CBBB47F8A9",
+          "record_count": 656
+        }
+      ],
+      "params": {
+        "corpus_id": "oe_beowulf_9700",
+        "lines_per_record": 5,
+        "start_regex": "(?im)^\\s*Hwät!",
+        "end_regex": "(?im)^\\s*LIST OF NAMES;\\s*NOTES;\\s*AND\\s*GLOSSARY\\.\\s*$"
+      },
+      "runtime": {
+        "python": "3.12.x",
+        "platform": "Windows-11",
+        "output_written_utc": "2026-02-21T17:03:41Z"
+      }
+    },
+    {
+      "step": "build_faiss",
+      "script": "src/build_vec_bede_faiss.py",
+      "run_utc": "2026-02-21T17:29:46Z",
+      "inputs": [
+        {
+          "path": "data_proc/oe_beowulf_9700_prod.jsonl",
+          "sha256": "41E580BFBBCC59D94316C6E090613FC39127448BFD231A7666B9E6CBBB47F8A9"
+        },
+        {
+          "path": "src/build_vec_bede_faiss.py",
+          "sha256": "67B8FE31AF307046F826BE7514073F48BA456616C635304DCC00ADFD407CB095"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "indexes/vec_faiss/oe_beowulf_9700.index",
+          "sha256": "6BDC6ECF9C8DEC3E92E5C553EEBB7B4D40DF27179BE69AB2C517DDE3D2729D1F",
+          "record_count": 656
+        },
+        {
+          "path": "indexes/vec_faiss/oe_beowulf_9700_ids.json",
+          "sha256": "817EC06F99C7E2075354CC0E472AC1BC48B57A9A1A609A48B554BE61EC805E6F",
+          "record_count": 656
+        },
+        {
+          "path": "indexes/vec_faiss/oe_beowulf_9700_meta.jsonl",
+          "sha256": "D2E0614AD52ED226B3EBE7AE3356E7A93C1AAAE2094509AF16A4F520EAC6978C",
+          "record_count": 656
+        }
+      ],
+      "params": {
+        "corpus_id": "oe_beowulf_9700",
+        "vec_dir": "indexes/vec_faiss"
+      },
+      "runtime": {
+        "python": "3.12.x",
+        "platform": "Windows-11"
+      }
+    },
+    {
+      "step": "build_bm25",
+      "script": "src/build_bm25_utf8.py",
+      "run_utc": "2026-02-21T17:39:47Z",
+      "inputs": [
+        {
+          "path": "data_proc/oe_beowulf_9700_prod.jsonl",
+          "sha256": "41E580BFBBCC59D94316C6E090613FC39127448BFD231A7666B9E6CBBB47F8A9"
+        },
+        {
+          "path": "src/build_bm25_utf8.py",
+          "sha256": "AF51C873517045954B1B41A2545D1CC9295685BE2A95A923A0FEFCEEF3F6D8A3"
+        }
+      ],
+      "outputs": [
+        {
+          "path": "indexes/bm25/oe_beowulf_9700_utf8.pkl",
+          "sha256": "97C55F90ED033230661D7B3D0FD7889303CD953E643F4AD5D53442104CA20954",
+          "record_count": 656
+        }
+      ],
+      "params": {
+        "corpus_id": "oe_beowulf_9700",
+        "bm25_dir": "indexes/bm25"
+      },
+      "runtime": {
+        "python": "3.12.x",
+        "platform": "Windows-11"
+      }
+    }
+  ]
+}

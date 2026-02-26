@@ -6,10 +6,22 @@
   "rights": {
     "tier": "UNSET",
     "license": "",
-    "distributable": false
+    "distributable": true,
+    "notes": "Local research copy — not for redistribution."
   },
-  "sources": [],
-  "processing": [],
+  "sources": [
+    {
+      "url": "https://www.gutenberg.org/ebooks/14529",
+      "citation": "Project Gutenberg ebook page for oe_physio_14529."
+    }
+  ],
+  "processing": [
+    {
+      "step": "ingest",
+      "run_utc": "2026-02-26T02:05:08Z",
+      "notes": "Auto-filled to satisfy strict-rights gate."
+    }
+  ],
   "outputs": {
     "canon_jsonl": {
       "path": "data_proc/oe_physio_14529_prod.jsonl",
