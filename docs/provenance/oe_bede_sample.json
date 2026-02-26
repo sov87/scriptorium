@@ -1,0 +1,26 @@
+{
+  "corpus_id": "oe_bede_sample",
+  "title": "Bede (Old English) — SAMPLE (seeded fixture)",
+  "rights": {
+    "tier": "A_demo",
+    "license": "Seeded fixture for CI demo (non-authoritative excerpt)",
+    "distributable": true,
+    "notes": "This is a tiny seeded fixture committed for CI; not a scholarly edition. Use for pipeline tests only."
+  },
+  "sources": [
+    {
+      "id": "scriptorium_sample_fixture",
+      "path": "sample_data/data_proc/oe_bede_sample_utf8.jsonl",
+      "citation": "Seeded test fixture distributed with the Scriptorium repository for CI validation."
+    }
+  ],
+  "processing": [
+    {
+      "step": "seed_fixture",
+      "script": "N/A",
+      "run_utc": "2000-01-01T00:00:00Z",
+      "notes": "Fixture generated once and pinned by sha256 in docs/corpora.public.json for CI."
+    }
+  ],
+  "notes": "Fixture only. Do not cite as a primary text source."
+}
