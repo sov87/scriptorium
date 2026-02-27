@@ -70,6 +70,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_db.add_argument("--overwrite", action="store_true")
     p_db.add_argument("--strict-provenance", action="store_true", help="Fail if any recorded canon_jsonl sha256 mismatches the on-disk JSONL (and, with this flag, also fail if a corpus with a canon_jsonl.path lacks sha256).")
     p_db.add_argument("--strict-rights", action="store_true", help="Fail closed on rights/provenance completeness for the registry used by db-build (public registry for sample CI; docs/corpora.json otherwise).")
+    p_db.add_argument(
+        "--registry-override",
+        default="",
+        metavar="PATH",
+        help=(
+            "Use this registry JSON instead of docs/corpora.json. "
+            "Path is relative to project root, or absolute. "
+            "Eliminates the need to swap docs/corpora.json for subset builds."
+        ),
+    )
 
     p_ds = sub.add_parser("db-search")
     p_ds.add_argument("--config", required=True)
@@ -267,34 +277,56 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if (args.strict and warnings) else 0
 
     if args.cmd == "db-build":
-        # Provenance gate: verify recorded canon_jsonl SHA256 before building DB
-        # Rights/provenance completeness gate (separate from sha256 integrity gate).
-        if bool(getattr(args, "strict_rights", False)):
-            from pathlib import Path as _Path
-            reg_override = (
-                getattr(cfg, "corpora_registry", None)
-                or getattr(cfg, "corpora_registry_path", None)
-                or getattr(cfg, "corpora_json", None)
-            )
-            if reg_override:
-                reg_path = (cfg.project_root / str(reg_override)).resolve()
+        # Resolve which registry file to use.
+        # Priority: --registry-override CLI > TOML config key > default docs/corpora.json
+        _reg_override_arg = (getattr(args, "registry_override", "") or "").strip()
+        _reg_from_cfg = (
+            getattr(cfg, "corpora_registry", None)
+            or getattr(cfg, "corpora_registry_path", None)
+            or getattr(cfg, "corpora_json", None)
+        )
+        if _reg_override_arg:
+            _reg_p = Path(_reg_override_arg)
+            effective_registry = (_reg_p if _reg_p.is_absolute() else (cfg.project_root / _reg_p)).resolve()
+        elif _reg_from_cfg:
+            effective_registry = (cfg.project_root / str(_reg_from_cfg)).resolve()
+        else:
+            cfg_name = Path(str(args.config)).name.lower()
+            if ("sample_demo_ci" in cfg_name) or cfg_name.startswith("sample_") or (str(getattr(cfg, "tag", "")).upper() == "CI"):
+                _pub = cfg.project_root / "docs" / "corpora.public.json"
+                effective_registry = _pub if _pub.exists() else (cfg.project_root / "docs" / "corpora.json")
             else:
-                cfg_name = _Path(str(args.config)).name.lower()
-                if ("sample_demo_ci" in cfg_name) or cfg_name.startswith("sample_") or (str(getattr(cfg, "tag", "")).upper() == "CI"):
-                    pub = (cfg.project_root / "docs" / "corpora.public.json")
-                    reg_path = pub if pub.exists() else (cfg.project_root / "docs" / "corpora.json")
-                else:
-                    reg_path = (cfg.project_root / "docs" / "corpora.json")
-            validate_all_corpora(cfg.project_root, registry_path=reg_path)
-            del _Path
+                effective_registry = (cfg.project_root / "docs" / "corpora.json").resolve()
 
+        # registry_rel is always relative to project_root for downstream consumers
+        try:
+            registry_rel = str(effective_registry.relative_to(cfg.project_root))
+        except ValueError:
+            # absolute path outside project root — pass it as-is
+            registry_rel = str(effective_registry)
+
+        # Rights/provenance completeness gate
+        if bool(getattr(args, "strict_rights", False)):
+            validate_all_corpora(cfg.project_root, registry_path=effective_registry)
+
+        # SHA256 provenance gate
         from .provenance import verify_canon_jsonl_sha256
-        verify_canon_jsonl_sha256(cfg.project_root, strict=bool(getattr(args, "strict_provenance", False)))
+        verify_canon_jsonl_sha256(
+            cfg.project_root,
+            registry_rel=registry_rel,
+            strict=bool(getattr(args, "strict_provenance", False)),
+        )
+
         script = cfg.project_root / "src" / "build_sqlite_db.py"
         out_arg = args.out
         if out_arg == "db/scriptorium.sqlite":
             out_arg = str(db_path)
-        cmd = [sys.executable, str(script), "--root", str(cfg.project_root), "--out", str(out_arg)]
+        cmd = [
+            sys.executable, str(script),
+            "--root", str(cfg.project_root),
+            "--out", str(out_arg),
+            "--registry", registry_rel,
+        ]
         if args.overwrite:
             cmd.append("--overwrite")
         subprocess.run(cmd, check=True)

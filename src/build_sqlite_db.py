@@ -42,14 +42,23 @@ def pick_id(rec: dict[str, Any]) -> str | None:
     return None
 
 
-def load_canon_paths_registry_only(root: Path) -> list[dict[str, Any]]:
+def load_canon_paths_registry_only(
+    root: Path,
+    registry_rel: str = "docs/corpora.json",
+) -> list[dict[str, Any]]:
     """
-    Authoritative: docs/corpora.json only.
+    Authoritative: registry file only (default: docs/corpora.json).
+    Pass registry_rel to override; path is relative to root unless absolute.
     If you want a corpus in the DB, it must be registered.
     """
-    reg = root / "docs" / "corpora.json"
+    reg = Path(registry_rel)
+    if not reg.is_absolute():
+        reg = (root / registry_rel).resolve()
+    else:
+        reg = reg.resolve()
+
     if not reg.exists():
-        raise SystemExit("Missing docs/corpora.json (registry is required for db build)")
+        raise SystemExit(f"Missing registry file: {reg}")
 
     j = json.loads(reg.read_text(encoding="utf-8-sig"))  # BOM-safe
 
@@ -69,7 +78,7 @@ def load_canon_paths_registry_only(root: Path) -> list[dict[str, Any]]:
             out.append({"corpus_id": cid, "title": title, "canon_path": canon_path})
 
     if not out:
-        raise SystemExit("Registry has no valid canon paths (docs/corpora.json)")
+        raise SystemExit(f"Registry has no valid canon paths ({reg})")
     return out
 
 
@@ -117,14 +126,11 @@ def rebuild_segments_fts(conn: sqlite3.Connection) -> None:
     Tokenizer: unicode61 with remove_diacritics=2 (diacritic-insensitive, Greek/Latin-friendly).
     Column order is fixed with text first to keep snippet()/highlight() column indices stable.
     """
-    # Drop old FTS table if present
     conn.execute("DROP TABLE IF EXISTS segments_fts;")
 
-    # Ensure FTS5 is available (will throw if not)
     conn.execute("CREATE VIRTUAL TABLE __fts_probe USING fts5(x);")
     conn.execute("DROP TABLE __fts_probe;")
 
-    # Fixed schema: text indexed; everything else UNINDEXED metadata for filtering/printing
     conn.execute(
         """
         CREATE VIRTUAL TABLE segments_fts USING fts5(
@@ -162,6 +168,16 @@ def main() -> int:
     ap.add_argument("--root", required=True)
     ap.add_argument("--out", default="db/scriptorium.sqlite")
     ap.add_argument("--overwrite", action="store_true")
+    ap.add_argument(
+        "--registry",
+        default="docs/corpora.json",
+        help=(
+            "Registry JSON to use (relative to --root, or absolute). "
+            "Default: docs/corpora.json. "
+            "Pass a different path to build from a subset registry without "
+            "touching docs/corpora.json."
+        ),
+    )
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
@@ -171,7 +187,7 @@ def main() -> int:
     if args.overwrite and out_path.exists():
         out_path.unlink()
 
-    corpora = load_canon_paths_registry_only(root)
+    corpora = load_canon_paths_registry_only(root, registry_rel=args.registry)
 
     conn = sqlite3.connect(str(out_path))
     try:
