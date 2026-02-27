@@ -42,18 +42,35 @@ Long-term scope (planned):
 - CI smoke:
   - builds CI DB, seeds an answer run without LLM, imports it, checks FTS, asserts the audit chain.
 
+- Provenance gate lock-in (CI-enforced):
+  - `verify_canon_jsonl_sha256()` has pytest coverage (pass + tamper-fail + missing-hash strict-fail).
+  - CI runs `db-build --strict-provenance` so sha256 mismatches fail closed.
+
 ## Catalog
 - Source catalog: docs/sources_catalog.json
 - Rule: do not add new corpora without updating catalog + rights/provenance notes.
+
+## Preferred open sources (Latin/Greek TEI)
+- PerseusDL `canonical-latinLit` (TEI + CTS; CC BY-SA 4.0)
+- PerseusDL `canonical-greekLit` (TEI + CTS; CC BY-SA 4.0)
+- OpenGreekAndLatin `First1KGreek` (TEI; CC BY-SA 4.0)
+- OpenGreekAndLatin `Latin` (TEI; CC BY-SA 4.0)
+- OpenGreekAndLatin `csel-dev` (EpiDoc/TEI for public-domain CSEL volumes; confirm per-file availability notes)
 
 ## Current status quick check
 - python -m scriptorium check-ai-fts --config configs\window_0597_0865.toml --json
 
 ## Next work (priority order)
-1) Commit + CI lock-in for provenance gate (`--strict-provenance`): add pytest coverage and document the invariant.
-2) Scale corpora (repeat the disciplined loop): add one additional Latin TEI corpus using the TEI/CTS module (ingest → register → provenance/rights → strict db-build → FTS smoke).
-3) Optional: add semantic hash (`canon_jsonl.semantic_hash_v1`) to reduce false alarms from harmless byte-level changes.
-4) Optional: Qwen3.5 integration (disable thinking via `extra_body` passthrough) once you decide to switch.
+1) Scale corpora (repeat the disciplined loop):
+   - Add 1 additional Latin TEI corpus from the preferred open sources.
+   - Add 1 additional Greek TEI corpus from the preferred open sources.
+   - For each: ingest → register in docs/corpora.json with canon_jsonl.path+sha256 → rights/provenance notes → strict db-build → FTS smoke.
+2) Add allowlist-based “harvest” tooling for OGL/Perseus repos:
+   - Clone/pull licensed repos into data_raw/ (untracked).
+   - Enumerate TEI, ingest to canonical JSONL, and emit a report with (corpus_id, work_id, out_path, sha256).
+   - Do not auto-commit registry churn; curate which corpora become executable.
+3) Optional: add semantic hash (canon_jsonl.semantic_hash_v1) to reduce false alarms from harmless byte-level changes.
+4) Optional: Qwen3.5 integration (disable thinking via extra_body passthrough) once you decide to switch.
 
 ## Session protocol (prevents token spiral)
 - End of session: update this file’s “milestone reached” and “next work”.

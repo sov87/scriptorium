@@ -41,6 +41,14 @@ XML_NS = "http://www.w3.org/XML/1998/namespace"
 
 NS = {"tei": TEI_NS, "xml": XML_NS}
 
+
+def _localname(el: ET._Element) -> Optional[str]:
+    """Return TEI localname; ignore lxml comment/PI nodes deterministically."""
+    tag = getattr(el, "tag", None)
+    if not isinstance(tag, str):
+        return None
+    return ET.QName(tag).localname
+
 _WS_RE = re.compile(r"\s+", flags=re.UNICODE)
 
 
@@ -167,8 +175,9 @@ def normalize_node_to_text(node: ET._Element) -> Tuple[str, Dict[str, Any]]:
     out: List[str] = []
 
     def rec(el: ET._Element, out_list: List[str]) -> None:
-        local = ET.QName(el).localname
-
+        local = _localname(el)
+        if local is None:
+            return
         # Insert whitespace markers for break-like tags to prevent token collisions.
         # These will collapse to a single space in normalize_search_text().
         if local in ("lb", "pb", "cb"):
@@ -210,8 +219,9 @@ def _extract_inner_text(el: ET._Element, meta: Dict[str, Any]) -> str:
     tmp: List[str] = []
 
     def rec(el2: ET._Element, out_list: List[str]) -> None:
-        local = ET.QName(el2).localname
-
+        local = _localname(el2)
+        if local is None:
+            return
         if local in ("lb", "pb", "cb"):
             out_list.append(" ")
 
@@ -379,7 +389,9 @@ def _segment_by_milestones(body: ET._Element) -> Iterator[SegmentDraft]:
         return sd
 
     for el in nodes:
-        local = ET.QName(el).localname
+        local = _localname(el)
+        if local is None:
+            return
         if local == "milestone":
             n = (el.get("n") or "").strip()
             if n:
@@ -425,7 +437,9 @@ def _compute_cts_like_loc(el: ET._Element) -> Optional[str]:
     ancestors.reverse()
 
     for a in ancestors:
-        local = ET.QName(a).localname
+        local = _localname(a)
+        if local is None:
+            continue
         if local.startswith("div"):
             n = (a.get("n") or "").strip()
             if n:

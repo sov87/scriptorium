@@ -95,3 +95,52 @@ logs/
 # local venvs
 .venv_clean/
 
+# -------------------------
+# Safety belt: never commit copyrighted source files or local-only registries
+# -------------------------
+
+# Private / local-only registries (BYOT / paid editions)
+docs/corpora.private.json
+docs/corpora.*.private.json
+docs/corpora.*.local.json
+docs/corpora.demo*.local.json
+
+# Local-only catalogue outputs (keep public catalogue tracked if you want)
+docs/SOURCES_CATALOGUE.local.json
+docs/SOURCES_CATALOGUE.local.md
+docs/SOURCES_CATALOGUE.private.json
+docs/SOURCES_CATALOGUE.private.md
+
+# Local-only provenance (recommended: keep all local-only corpora IDs prefixed with "local_")
+docs/provenance/local_*.json
+docs/provenance/private_*.json
+
+# Marker debug dumps / extraction traces
+*.marker.json
+*.marker.*.json
+
+# Common ebook / scanned-book formats (do not commit anywhere)
+*.pdf
+*.epub
+*.mobi
+*.azw
+*.azw3
+*.azw4
+*.djvu
+*.cbz
+*.cbr
+
+# --- local/generated (do not commit) ---
+/output/
+/manifests/
+/reports/
+/db/
+/data_raw/
+/data_proc/
+
+# --- one-off patch artifacts / backups ---
+*.OLD
+*.prevalidate
+*.diff
+patch_*.py
+

@@ -6,10 +6,27 @@
   "rights": {
     "tier": "UNSET",
     "license": "",
-    "distributable": false
+    "distributable": true
   },
-  "sources": [],
-  "processing": [],
+  "sources": [
+    {
+      "repo": "UNKNOWN_REPO",
+      "license": "GPL-3.0"
+    }
+  ],
+  "processing": [
+    {
+      "step": "ingest_or_harvest",
+      "script": "src/ingest/harvest_capitains_repo.py (or other ingest)",
+      "run_utc": "2026-02-26T02:02:51Z",
+      "inputs": [
+        {
+          "tei": "UNKNOWN"
+        }
+      ],
+      "notes": "Auto-filled from registry + harvest index (report=UNKNOWN)."
+    }
+  ],
   "outputs": {
     "canon_jsonl": {
       "path": "data_proc/echoe_tei_prod.jsonl",
